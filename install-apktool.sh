@@ -1,18 +1,14 @@
-#!/bin/bash
-
-# =======================================================
-#               INSTALL-APKTOOL.SH - Instalasi Rapi
-# Script ini mengunduh Apktool.jar dan membuat alias.
-# =======================================================
-
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 APKTOOL_JAR="$HOME/script/apktool.jar"
 
 if [ ! -f "$APKTOOL_JAR" ]; then
     echo -e "${YELLOW}🚀 [INSTAL] Mengunduh Apktool.jar ke $HOME/script/...${NC}"
     
-    # Mengunduh JAR file (Wajib ada Wget dari install-java.sh)
-    wget -O $APKTOOL_JAR https://github.com/iBotPeaches/Apktool/releases/latest/download/apktool.jar
+    # FIX KRITIS: Menggunakan link versi spesifik (v2.9.3 adalah versi stabil yang tidak sering ganti)
+    STABLE_URL="https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar"
+    
+    # Mengunduh JAR file
+    wget -O $APKTOOL_JAR $STABLE_URL
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ SUKSES! Apktool.jar sudah ada di folder script!${NC}"
