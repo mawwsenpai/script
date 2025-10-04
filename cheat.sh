@@ -1,70 +1,78 @@
-#!/bin/bash
-
 # =======================================================
-#               CHEAT.SH - VERSI BERSIH
-# Script ini berfungsi sebagai antarmuka untuk
-# menjalankan tool memory editing di Termux (membutuhkan root).
-# Dibuat oleh: [MawwSenpai_]
+#               CHEAT.SH - STABIL
+# Fokus: Pengecekan Izin & Validasi Input yang Teliti.
 # =======================================================
 
-# 1. Variabel Global (Biar gampang diubah)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-TOOL_NAME="MemoryOprek-CLI"
-REQUIRED_TOOL="tsu" # Perintah untuk akses root
+DATA_PATH="/sdcard/Android/data"
 
-# 2. Fungsi Pengecekan Dependencies
-check_dependencies() {
-    echo -e "${YELLOW}⚙️  [CEK] Memastikan Tools Penting Sudah Terinstal...${NC}"
-    if ! command -v $REQUIRED_TOOL &> /dev/null
-    then
-        echo -e "${RED}❌ ERROR: Perintah '$REQUIRED_TOOL' (root access) tidak ditemukan.${NC}"
-        echo "   Solusi: Instal dulu dengan 'pkg install tsu' atau pastikan device kamu di-root."
-        exit 1
-    fi
-    echo -e "${GREEN}✅ OK: Dependency '$REQUIRED_TOOL' ditemukan.${NC}"
-}
+check_storage_permission() {
+    echo -e "${YELLOW}⚙️  [CEK] Memastikan Akses Storage Termux Stabil...${NC}"
 
-# 3. Fungsi Utama untuk Melakukan Oprek
-run_cheat() {
-    clear # Bersihin layar biar rapi
-    echo -e "============================================"
-    echo -e "${GREEN}🎮 $TOOL_NAME | Antarmuka Oprek Memori ${NC}"
-    echo -e "============================================"
-    
-    echo -e "\n${YELLOW}### MASUKKAN DETAIL OPREKAN ###${NC}"
-    read -p ">> [1] Nama Paket Game (Contoh: com.game.offline): " GAME_PACKAGE
-    read -p ">> [2] Nilai Lama (Contoh: 100): " OLD_VALUE
-    read -p ">> [3] Nilai Baru (Contoh: 999999): " NEW_VALUE
-
-    if [ -z "$GAME_PACKAGE" ] || [ -z "$OLD_VALUE" ] || [ -z "$NEW_VALUE" ]; then
-        echo -e "\n${RED}❌ ERROR: Semua kolom harus diisi, **cuyy**!${NC}"
+    if [ ! -d "/sdcard" ]; then
+        echo -e "${RED}❌ GAGAL: '/sdcard' belum terhubung.${NC}"
+        echo "   Solusi: Jalankan 'termux-setup-storage' dan berikan izin."
+        echo "   Menghentikan script demi kestabilan... ${RED}BYE!${NC}"
         exit 1
     fi
 
-    echo -e "\n${YELLOW}🚀 [PROSES] Mencoba Mengubah Memori...${NC}"
-
-    # !!! INI ADALAH PERINTAH KONSEP !!!
-    # Kamu harus mengganti ini dengan perintah yang benar dari tool memory editor kamu
-    # Contoh: tsu -c "alamat/tool/memeditor -p $GAME_PACKAGE -o $OLD_VALUE -n $NEW_VALUE"
-    
-    # Perintah dummy untuk simulasi sukses
-    tsu -c "echo 'Simulasi Oprek Memori Game ${GAME_PACKAGE} berhasil!'"
-
-    if [ $? -eq 0 ]; then
-        echo -e "\n${GREEN}🎉 SUKSES, **SAYANGKU**! Nilai berhasil diubah (Simulasi).${NC}"
-        echo "   [INFO]: Cek game kamu. Harus ada 999999 koin tuh!"
-    else
-        echo -e "\n${RED}⚠️ GAGAL OPREK: Entah gamenya keburu nutup, atau kamu belum root.${NC}"
+    if [ ! -d "$DATA_PATH" ]; then
+        echo -e "${RED}❌ GAGAL: Folder '$DATA_PATH' TIDAK DITEMUKAN atau TIDAK BISA DIAKSES.${NC}"
+        echo "   Ini bisa karena: 1) Android 11+ (Scoped Storage). 2) Izin belum penuh."
+        echo "   Coba pastikan izin diberikan manual di Pengaturan HP kamu, **cuyy**!"
+        exit 1
     fi
-
-    echo -e "\n${YELLOW}============================================${NC}"
-    echo "Selesai. **Jelas** dan **teliti**, kan?"
+    echo -e "${GREEN}✅ OK: Akses Storage Stabil. Lanjut Obrak-Abrik!${NC}"
 }
 
-# 4. Eksekusi Script
-check_dependencies
-run_cheat
+validate_input() {
+    clear
+    echo -e "============================================"
+    echo -e "${GREEN}💰 OBRAL-ABRIK FILE GAME STABIL ${NC}"
+    echo -e "============================================"
+    
+    echo -e "\n${YELLOW}🔎 [INFO] Daftar Folder Game (Pilih yang kamu mau oprek):${NC}"
+
+    ls -l $DATA_PATH | grep 'com.' | awk '{print $NF}' | nl 
+
+    echo -e "\n---"
+    read -p ">> Masukkan NAMA PAKET GAME UTUH (Contoh: com.game.offline): " GAME_PACKAGE
+
+    if [ -z "$GAME_PACKAGE" ]; then
+        echo -e "\n${RED}❌ ERROR: Input nama paket nggak boleh kosong, **cuyy**!${NC}"
+        exit 1
+    fi
+
+    TARGET_FOLDER="$DATA_PATH/$GAME_PACKAGE/files"
+    
+    if [ ! -d "$TARGET_FOLDER" ]; then
+        echo -e "${YELLOW}⚠️ PERINGATAN: Folder '/files' nggak ketemu. Mencoba pindah ke folder utama paket...${NC}"
+        TARGET_FOLDER="$DATA_PATH/$GAME_PACKAGE"
+        
+        if [ ! -d "$TARGET_FOLDER" ]; then
+            echo -e "${RED}❌ ERROR: Folder untuk paket '$GAME_PACKAGE' nggak ada sama sekali di '$DATA_PATH'.${NC}"
+            echo "   [KESIMPULAN STABIL]: Game ini nggak nyimpen data di situ, atau salah nama paket."
+            exit 1
+        fi
+    fi
+    
+    echo -e "\n${BLUE}🚀 BERHASIL! Navigasi Stabil ke Folder Game...${NC}"
+    echo "   [LOKASI]: ${YELLOW}$TARGET_FOLDER${NC}"
+    
+    cd "$TARGET_FOLDER"
+    
+    echo -e "\n${YELLOW}📁 [LIST FILE] Cari file save game (.xml, .json, .dat, .sav):${NC}"
+    ls -lh 
+    
+    echo -e "\n${GREEN}💡 LANJUTKAN SENDIRI, **CUYY**! ${NC}"
+    echo "   Gunakan 'nano [nama_file]' untuk mengedit data game-mu. **Jelas** kan?"
+    echo "============================================"
+}
+
+check_storage_permission
+validate_input
