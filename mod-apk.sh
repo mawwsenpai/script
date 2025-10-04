@@ -1,23 +1,17 @@
-#!/bin/bash
-
-# =======================================================
-#               MOD-APK.SH - Eksekusi Bongkar APK
-# Script ini menjalankan proses pembongkaran setelah tool diinstal.
-# =======================================================
-
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+APKTOOL_JAR="$HOME/script/apktool.jar"
 
 echo -e "=================================================="
-echo -e "${GREEN}⚙️  MOD-APK.SH | Cek & Eksekusi Tool Bongkar ${NC}"
+echo -e "${GREEN}💰 MOD-APK.SH | Bongkar dan Obrak-Abrik APK ${NC}"
 echo -e "=================================================="
 
 # 1. Cek Kesiapan Tool
-if ! command -v java &> /dev/null || [ ! -f "$HOME/script/apktool.jar" ]; then
-    echo -e "${RED}❌ ERROR: Tool belum lengkap. Jalankan: ${YELLOW}./install-java.sh${RED} dan ${YELLOW}./install-apktool.sh${NC}"
+if ! command -v java &> /dev/null || [ ! -f "$APKTOOL_JAR" ]; then
+    echo -e "${RED}❌ ERROR: Tool belum lengkap. Jalankan Option 0 di main.sh dulu!${NC}"
     exit 1
 fi
 
-# 2. Lanjut ke Pembongkaran (Disassemble)
+# 2. Pembongkaran (Disassemble)
 echo -e "\n${YELLOW}🚀 Tool Sudah SIAP STABIL. Lanjut ke Pembongkaran!${NC}"
 read -p ">> Masukkan NAMA FILE APK (Contoh: Pou.apk): " APK_FILE
 
@@ -31,14 +25,22 @@ if [ ! -f "$APK_FILE" ]; then
     exit 1
 fi
 
-OUTPUT_FOLDER="${APK_FILE%.apk}-CHEAT"
+OUTPUT_FOLDER="${APK_FILE%.apk}-MODIF"
 echo -e "\n${BLUE}🔨 Membongkar $APK_FILE ke folder '$OUTPUT_FOLDER'..."
-apktool d "$APK_FILE" -o "$OUTPUT_FOLDER"
+java -jar $APKTOOL_JAR d "$APK_FILE" -o "$OUTPUT_FOLDER"
 
-if [ $? -eq 0 ]; then
-    echo -e "\n${GREEN}🎉 SUKSES! APK '$APK_FILE' berhasil dibongkar!${NC}"
-    echo -e ">> Kode Smali siap diobrak-abrik di folder: ${YELLOW}$OUTPUT_FOLDER${NC}"
-    echo "=================================================="
-else
-    echo -e "\n${RED}❌ GAGAL Membongkar APK. Kemungkinan terproteksi!${NC}"
+if [ $? -ne 0 ]; then
+    echo -e "\n${RED}❌ GAGAL Membongkar APK. Kemungkinan terproteksi atau Java bermasalah!${NC}"
+    exit 1
 fi
+
+# 3. Panduan Modifikasi & Perintah Rebuild/Sign
+echo -e "\n${GREEN}🎉 SUKSES BONGKAR! Kode Smali siap diobrak-abrik di: ${YELLOW}$OUTPUT_FOLDER${NC}"
+echo -e "\n${BLUE}💡 LANGKAH SELANJUTNYA (WAJIB MANUAL):${NC}"
+echo "1. Edit kode Smali di folder '$OUTPUT_FOLDER' (Gunakan Nano)."
+echo "2. Setelah selesai, jalankan Rebuild dan Sign."
+echo -e "--------------------------------------------------"
+echo -e "${YELLOW}PERINTAH REBUILD & SIGN (Setelah Edit Kode):${NC}"
+echo -e "   1. Rebuild: ${GREEN}apktool b $OUTPUT_FOLDER -o $OUTPUT_FOLDER.apk${NC}"
+echo -e "   2. Sign: ${GREEN}./sign-apk.sh $OUTPUT_FOLDER.apk${NC}"
+
