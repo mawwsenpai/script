@@ -1,72 +1,64 @@
 #!/bin/bash
 
 # =======================================================
-#               MOD-APK.SH - Pembongkar Game Offline
-# Script ini menginstal tool untuk Reverse Engineering APK (Smali).
+#               MOD-APK.SH - Versi SUPER STABIL
+# FIX: Error openjdk-17 dan command not found pada Apktool.
 # =======================================================
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; NC='\033[0m'
+APKTOOL_BIN="/data/data/com.termux/files/usr/bin"
+APKTOOL_JAR_NAME="apktool.jar"
+APKTOOL_WRAPPER="apktool-wrapper" # Nama baru biar gak tabrakan
 
-# 1. Pengecekan Dependencies
+# 1. Pengecekan Dependencies STABIL (Ganti ke openjdk-11)
 check_tools() {
-    echo -e "${YELLOW}⚙️  [CEK] Memastikan Java dan Wget Terinstal...${NC}"
-    pkg update -y
-    
-    # Apktool butuh Java
+    echo -e "${YELLOW}⚙️  [CEK] Memastikan Paket Dasar (Java & Wget) Terinstal...${NC}"
+    pkg update -y 
+    pkg upgrade -y # Wajib upgrade biar repository stabil
+
+    # Coba instal OpenJDK 11 (Lebih stabil di Termux)
     if ! command -v java &> /dev/null
     then
-        echo -e "${YELLOW}🛠️  Instalasi Java (OpenJDK) dan Wget...${NC}"
-        pkg install openjdk-17 wget -y
+        echo -e "${YELLOW}🛠️  Instalasi OpenJDK 11 dan Wget...${NC}"
+        pkg install openjdk-11 wget -y
     fi
-    echo -e "${GREEN}✅ OK: Java dan Wget siap!${NC}"
+    
+    if command -v java &> /dev/null
+    then
+        echo -e "${GREEN}✅ OK: Java dan Wget siap!${NC}"
+    else
+        echo -e "${RED}❌ ERROR KRITIS: Java GAGAL diinstal. Perlu cek koneksi atau repository.${NC}"
+        exit 1
+    fi
 }
 
-# 2. Instalasi Apktool (Versi Terbaru)
+# 2. Instalasi Apktool (Fix Path)
 install_apktool() {
-    APKTOOL_DIR="/data/data/com.termux/files/usr/bin"
-    APKTOOL_JAR="apktool.jar"
-    
     echo -e "\n${YELLOW}🚀 [INSTAL] Mengunduh dan Setup Apktool...${NC}"
-
-    # Mengunduh script wrapper
-    wget -O $APKTOOL_DIR/apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-    chmod +x $APKTOOL_DIR/apktool
-
-    # Mengunduh JAR file
-    wget -O $APKTOOL_DIR/$APKTOOL_JAR https://github.com/iBotPeaches/Apktool/releases/latest/download/apktool.jar
     
-    echo -e "${GREEN}🎉 SUKSES! Apktool sekarang bisa dipakai dari mana saja!${NC}"
+    # 2a. Mengunduh JAR file (File utama Apktool)
+    wget -O $APKTOOL_BIN/$APKTOOL_JAR_NAME https://github.com/iBotPeaches/Apktool/releases/latest/download/apktool.jar
+    
+    # 2b. Membuat script wrapper baru (untuk menjalankan JAR)
+    echo '#!/data/data/com.termux/files/usr/bin/bash' > $APKTOOL_BIN/$APKTOOL_WRAPPER
+    echo 'java -jar $PREFIX/bin/apktool.jar "$@"' >> $APKTOOL_BIN/$APKTOOL_WRAPPER
+    
+    # 2c. Beri izin eksekusi ke wrapper
+    chmod +x $APKTOOL_BIN/$APKTOOL_WRAPPER
+
+    # 2d. Buat alias agar bisa dipanggil dengan 'apktool'
+    if ! grep -q "alias apktool" ~/.bashrc; then
+        echo -e "\n# Alias untuk Apktool\nalias apktool='$APKTOOL_WRAPPER'" >> ~/.bashrc
+    fi
+
+    echo -e "${GREEN}🎉 SUKSES! Apktool sudah dipasang. Restart Termux untuk menggunakan 'apktool'.${NC}"
 }
 
-# 3. Panduan Penggunaan yang Jelas
-usage_guide() {
-    echo -e "\n=================================================="
-    echo -e "${GREEN}📝 PANDUAN BONGKAR APK (Reverse Engineering)${NC}"
-    echo -e "=================================================="
-    
-    echo -e "${BLUE}STEP 1: Pindahkan APK ke Termux${NC}"
-    echo ">> Pindahkan file game.apk kamu ke folder ${YELLOW}~/script/${NC}"
-    
-    echo -e "${BLUE}STEP 2: Bongkar (Disassemble)${NC}"
-    echo ">> Ini akan membongkar kode ke folder baru (Contoh: ${YELLOW}game-folder/${NC}):"
-    echo -e "${YELLOW}    apktool d [nama_file_game].apk -o game-folder${NC}"
-
-    echo -e "\n${BLUE}STEP 3: Obrak-Abrik Kode!${NC}"
-    echo ">> Masuk ke ${YELLOW}game-folder/smali/com/.../${NC}"
-    echo ">> Cari file yang mungkin menyimpan nilai (misal: HealthActivity.smali)."
-    echo ">> Edit pakai Nano: ${YELLOW}nano game-folder/smali/....smali${NC}"
-
-    echo -e "\n${BLUE}STEP 4: Satukan Lagi (Rebuild)${NC}"
-    echo ">> Setelah diedit, satukan lagi menjadi APK baru (Contoh: ${YELLOW}new-game.apk${NC}):"
-    echo -e "${YELLOW}    apktool b game-folder -o new-game.apk${NC}"
-    
-    echo -e "\n${YELLOW}=================================================="
-    echo "Sekarang kamu bisa instal APK yang sudah kamu modifikasi!"
-    echo "Ini lebih **detail** dan **stabil** daripada ngurus izin folder!"
-    echo "==================================================${NC}"
-}
-
-# 4. Eksekusi
+# 3. Eksekusi
 check_tools
 install_apktool
-usage_guide
+# usage_guide sengaja dihilangkan agar user fokus restart
+echo -e "\n${BLUE}=================================================="
+echo "SILAKAN RESTART TERMUX (Tutup dan Buka lagi)!"
+echo "Lalu ketik 'apktool' untuk cek instalasi!"
+echo "==================================================${NC}"
