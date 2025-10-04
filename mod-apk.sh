@@ -1,185 +1,210 @@
+#!/bin/bash
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# ===================================================================================
+#               MOD-APK.SH v3.0 - The Professional Workflow Engine
+#
+#   Script ini adalah sebuah lingkungan kerja modding APK yang lengkap dan cerdas.
+#   Fitur:
+#   - Lingkungan kerja terisolasi di ~/apk_projects
+#   - Pengecekan semua dependensi di awal
+#   - Validasi XML otomatis (Pre-flight Check) sebelum rebuild untuk mencegah error
+#   - Logging otomatis untuk setiap proses bongkar/pasang
+#   - Penanganan interupsi (Ctrl+C) untuk bersih-bersih
+#
+#                                  Crafted for Mawwsenpai
+# ===================================================================================
 
-# --- Konfigurasi Awal (Bisa disesuaikan) ---
+# --- [1] KONFIGURASI & VARIABEL GLOBAL ---
+# Palet Warna & Style
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+BOLD=$(tput bold); NORMAL=$(tput sgr0)
+
+# Path Penting (Bisa disesuaikan jika perlu)
 APKTOOL_JAR="$HOME/script/apktool.jar"
-SIGN_SCRIPT="./sign-apk.sh"
-DOWNLOAD_PATH="$HOME/storage/downloads"
-STORAGE_PATH="$HOME/storage/shared"
+SIGN_SCRIPT="$HOME/script/sign-apk.sh"
+WORKSPACE_DIR="$HOME/apk_projects"
+LOG_DIR="$WORKSPACE_DIR/logs"
 
-# Fungsi buat nampilin header biar keren
+# Variabel untuk nama file log dinamis
+LOG_FILE=""
+
+# --- [2] FUNGSI-FUNGSI HELPER (ASISTEN SCRIPT) ---
+
+# Fungsi bersih-bersih jika script dihentikan paksa (Ctrl+C)
+cleanup_on_exit() {
+    echo -e "\n\n${RED}⚠️  Proses dihentikan paksa. Menjalankan bersih-bersih...${NC}"
+    # Hapus file-file temporary Apktool jika ada
+    rm -rf "$HOME/.local/share/apktool/framework/"*
+    echo -e "${GREEN}✅ Bersih-bersih selesai.${NC}"
+    exit 1
+}
+trap cleanup_on_exit INT TERM
+
+# Fungsi untuk menyiapkan lingkungan kerja
+setup_lingkungan() {
+    mkdir -p "$WORKSPACE_DIR"
+    mkdir -p "$LOG_DIR"
+}
+
+# Fungsi untuk menampilkan header
 tampilkan_header() {
     clear
-    echo -e "=================================================="
-    echo -e "${GREEN}💰 MOD-APK.SH v2.0 | Studio Oprek APK Otomatis ${NC}"
-    echo -e "=================================================="
+    echo -e "${BLUE}${BOLD}===================================================================${NC}"
+    echo -e "${GREEN}${BOLD}         🔧 MOD-APK.SH v3.0 - Pro Workflow Engine 🔧${NC}"
+    echo -e "${BLUE}${BOLD}===================================================================${NC}"
+    echo -e "${YELLOW}Lingkungan Kerja: $WORKSPACE_DIR${NC}\n"
 }
 
-# Fungsi buat ngecek alat tempur (Java & Apktool)
-cek_alat_tempur() {
-    echo -e "${YELLOW}>> Mengecek kesiapan alat tempur...${NC}"
-    local error=0
-    if ! command -v java &> /dev/null; then
-        echo -e "${RED}   - Status Java: TIDAK ADA${NC}"
-        error=1
-    else
-        echo -e "${GREEN}   + Status Java: Ada${NC}"
-    fi
+# Fungsi pengecekan semua dependensi di awal
+cek_dependensi() {
+    echo -e "${YELLOW}🔍 Mengecek kesiapan sistem dan semua alat tempur...${NC}"
+    local ALL_OK=1
+    # Cek Java
+    if ! command -v java &>/dev/null; then echo -e "${RED}  ❌ Java (JDK): Tidak ditemukan! Install dengan './install-java.sh'${NC}"; ALL_OK=0; fi
+    # Cek Apktool
+    if [ ! -f "$APKTOOL_JAR" ]; then echo -e "${RED}  ❌ Apktool: '$APKTOOL_JAR' tidak ditemukan! Install dengan './install-apktool.sh'${NC}"; ALL_OK=0; fi
+    # Cek Script Sign
+    if [ ! -f "$SIGN_SCRIPT" ]; then echo -e "${RED}  ❌ Sign Script: '$SIGN_SCRIPT' tidak ditemukan!${NC}"; ALL_OK=0; fi
+    # Cek xmllint
+    if ! command -v xmllint &>/dev/null; then echo -e "${RED}  ❌ XML Validator: 'xmllint' tidak ditemukan! Install dengan 'pkg install libxml2-utils'${NC}"; ALL_OK=0; fi
 
-    if [ ! -f "$APKTOOL_JAR" ]; then
-        echo -e "${RED}   - Status Apktool JAR: TIDAK ADA di '$APKTOOL_JAR'${NC}"
-        error=1
+    if [ $ALL_OK -eq 1 ]; then
+        echo -e "${GREEN}✅ Semua alat tempur siap di posisinya masing-masing!${NC}\n"
     else
-        echo -e "${GREEN}   + Status Apktool JAR: Ada${NC}"
-    fi
-
-    if [ $error -eq 1 ]; then
-        echo -e "\n${RED}❌ ERROR KRITIS: Tool belum lengkap!${NC}"
-        echo -e ">> Solusi: Pastikan Java terinstall dan jalankan ${YELLOW}Menu 0${NC} di main.sh!"
+        echo -e "\n${RED}🔥 Sistem belum siap! Mohon install semua kebutuhan di atas.${NC}"
         exit 1
     fi
-    echo -e "${GREEN}>> Alat tempur SIAP STABIL!${NC}\n"
 }
 
-# Fungsi buat bongkar APK
+# --- [3] FUNGSI-FUNGSI INTI (MESIN UTAMA) ---
+
+# Fungsi Validasi XML (Pre-flight Check)
+validasi_xml() {
+    local PROJECT_DIR=$1
+    echo -e "\n${YELLOW}🔬 [Pre-flight Check] Memeriksa 'kesehatan' file XML sebelum rebuild...${NC}"
+    
+    for xml_file in $(find "$PROJECT_DIR/res" -type f -name "*.xml"); do
+        if ! xmllint --noout "$xml_file" >/dev/null 2>&1; then
+            echo -e "\n${RED}==================== ERROR SINTAKS DITEMUKAN ====================${NC}"
+            echo -e "${RED}❌ Validasi GAGAL! Ditemukan error pada file XML.${NC}"
+            echo -e "${YELLOW}   File Bermasalah: $xml_file${NC}"
+            echo -e "${BLUE}   Laporan dari Dokter XML (xmllint):${NC}"
+            xmllint --noout "$xml_file" # Tampilkan error spesifik
+            echo -e "${RED}===============================================================${NC}"
+            echo -e "${YELLOW}>> Rebuild dibatalkan. Silakan perbaiki file di atas lalu coba lagi.${NC}"
+            return 1 # Mengembalikan status gagal
+        fi
+    done
+
+    echo -e "${GREEN}✅ [Pre-flight Check] Semua file XML terlihat sehat! Melanjutkan rebuild...${NC}"
+    return 0 # Mengembalikan status sukses
+}
+
+# Fungsi untuk menandatangani APK
+tanda_tangan_apk() {
+    local REBUILT_APK=$1
+    echo -e "\n${YELLOW}✍️  Memanggil script '$SIGN_SCRIPT' untuk proses signing...${NC}"
+    if ! "$SIGN_SCRIPT" "$REBUILT_APK"; then
+        echo -e "\n${RED}❌ Proses signing gagal! Cek output dari '$SIGN_SCRIPT'.${NC}"
+        return 1
+    fi
+}
+
+# Fungsi untuk merakit (rebuild) APK
+pasang_apk() {
+    local PROJECT_DIR=$1
+    local APK_NAME=$(basename "$PROJECT_DIR" -MODIF)
+    local REBUILT_APK="$PROJECT_DIR-REBUILT.apk"
+    LOG_FILE="$LOG_DIR/${APK_NAME}_rebuild_$(date +%F_%H-%M-%S).log"
+    
+    echo -e "\n${BLUE}🔧 Merakit ulang (Rebuild) folder '$PROJECT_DIR'...${NC}"
+    echo -e "${YELLOW}   (Log lengkap disimpan di: $LOG_FILE)${NC}"
+    
+    # Menjalankan rebuild dan menyimpan output ke log DAN menampilkannya di layar
+    if java -jar "$APKTOOL_JAR" b "$PROJECT_DIR" -f -o "$REBUILT_APK" | tee "$LOG_FILE"; then
+        echo -e "\n${GREEN}🎉 SUKSES REBUILD! File sementara: ${YELLOW}$REBUILT_APK${NC}"
+        tanda_tangan_apk "$REBUILT_APK"
+    else
+        echo -e "\n${RED}❌ GAGAL Rebuild APK! Cek log error di atas dan di file log untuk detail.${NC}"
+        return 1
+    fi
+}
+
+# Fungsi untuk membongkar APK
 bongkar_apk() {
     tampilkan_header
-    echo -e "${BLUE}--- MENU 1: BONGKAR APK ---${NC}"
     read -p ">> Masukkan NAMA FILE APK (Contoh: Pou.apk): " APK_FILE
+    if [ -z "$APK_FILE" ]; then echo -e "${RED}ERROR: Nama file jangan kosong!${NC}"; return; fi
 
-    if [ -z "$APK_FILE" ]; then
-        echo -e "${RED}❌ ERROR: Nama file jangan dikosongin dong!${NC}"
-        return 1
-    fi
+    local INPUT_PATH="" # Cari file di lokasi-lokasi umum
+    if [ -f "$APK_FILE" ]; then INPUT_PATH="$APK_FILE";
+    elif [ -f "$HOME/storage/downloads/$APK_FILE" ]; then INPUT_PATH="$HOME/storage/downloads/$APK_FILE";
+    elif [ -f "$HOME/storage/shared/$APK_FILE" ]; then INPUT_PATH="$HOME/storage/shared/$APK_FILE";
+    else echo -e "${RED}❌ ERROR: File '$APK_FILE' tidak ditemukan!${NC}"; return; fi
+    echo -e "${GREEN}✅ File ditemukan di: $INPUT_PATH${NC}"
 
-    local INPUT_PATH=""
-    # Cek file di 3 lokasi stabil
-    if [ -f "$APK_FILE" ]; then
-        INPUT_PATH="$APK_FILE"
-        echo -e "${GREEN}✅ Ditemukan di: Folder Proyek${NC}"
-    elif [ -f "$DOWNLOAD_PATH/$APK_FILE" ]; then
-        INPUT_PATH="$DOWNLOAD_PATH/$APK_FILE"
-        echo -e "${GREEN}✅ Ditemukan di: Folder Download${NC}"
-    elif [ -f "$STORAGE_PATH/$APK_FILE" ]; then
-        INPUT_PATH="$STORAGE_PATH/$APK_FILE"
-        echo -e "${GREEN}✅ Ditemukan di: Folder Internal Utama${NC}"
-    else
-        echo -e "${RED}❌ ERROR: File '$APK_FILE' kaga ketemu di 3 lokasi wajib!${NC}"
-        echo -e ">> Pastikan file ada di folder skrip, Download, atau Internal utama HP lu!${NC}"
-        return 1
-    fi
+    local APK_NAME=$(basename "$APK_FILE" .apk)
+    local PROJECT_DIR="$WORKSPACE_DIR/${APK_NAME}-MODIF"
+    LOG_FILE="$LOG_DIR/${APK_NAME}_decompile_$(date +%F_%H-%M-%S).log"
+    
+    echo -e "\n${BLUE}🔨 Membongkar $APK_FILE ke '$PROJECT_DIR'...${NC}"
+    echo -e "${YELLOW}   (Log lengkap disimpan di: $LOG_FILE)${NC}"
 
-    local OUTPUT_FOLDER="${APK_FILE%.apk}-MODIF"
-    echo -e "\n${BLUE}🔨 Membongkar $APK_FILE ke folder '$OUTPUT_FOLDER'...${NC}"
-    java -jar "$APKTOOL_JAR" d "$INPUT_PATH" -f -o "$OUTPUT_FOLDER"
+    if java -jar "$APKTOOL_JAR" d "$INPUT_PATH" -f -o "$PROJECT_DIR" | tee "$LOG_FILE"; then
+        echo -e "\n${GREEN}🎉 SUKSES BONGKAR! Proyek siap diobrak-abrik di:${NC}"
+        echo -e "${YELLOW}$PROJECT_DIR${NC}"
+        echo -e "\n${BLUE}Silakan edit file-file di dalam folder tersebut. Setelah selesai...${NC}"
+        read -p ">> Tekan [ENTER] untuk memulai validasi dan proses rebuild..."
 
-    if [ $? -ne 0 ]; then
-        echo -e "\n${RED}❌ GAGAL Membongkar APK! Kayaknya APK-nya pake proteksi tingkat dewa!${NC}"
-        return 1
-    fi
-
-    echo -e "\n${GREEN}🎉 SUKSES BONGKAR! Kode Smali siap diobrak-abrik di: ${YELLOW}$OUTPUT_FOLDER${NC}"
-    echo -e "=================================================="
-    echo -e "\n${BLUE}💡 PANDUAN OPREK SINGKAT (Contoh Cheat Koin):${NC}"
-    echo "1. Buka folder ${YELLOW}$OUTPUT_FOLDER${NC} dan edit file smali yang relevan."
-    echo "2. Cari baris kode mencurigakan, contoh: ${RED}const/4 vX, 0x0${NC}"
-    echo "3. Ubah nilainya jadi gede banget buat sultan mode."
-    echo -e "\n${YELLOW}Kalo udah selesai ngedit, pencet [ENTER] buat lanjut ke proses PASANG & SIGN...${NC}"
-    read -p ""
-
-    pasang_apk "$OUTPUT_FOLDER"
-}
-
-# Fungsi buat pasang/rebuild APK dari folder
-pasang_apk() {
-    local FOLDER_MODIF="$1"
-    if [ -z "$FOLDER_MODIF" ]; then
-        tampilkan_header
-        echo -e "${BLUE}--- MENU 2: PASANG/REBUILD APK ---${NC}"
-        read -p ">> Masukkan NAMA FOLDER hasil bongkaran: " FOLDER_MODIF
-        if [ ! -d "$FOLDER_MODIF" ]; then
-            echo -e "${RED}❌ ERROR: Folder '$FOLDER_MODIF' tidak ada!${NC}"
-            return 1
+        if validasi_xml "$PROJECT_DIR"; then
+            pasang_apk "$PROJECT_DIR"
         fi
-    fi
-
-    local APK_HASIL="${FOLDER_MODIF}-REBUILT.apk"
-    echo -e "\n${BLUE}🔧 Merakit ulang (Rebuild) folder '$FOLDER_MODIF' menjadi '$APK_HASIL'...${NC}"
-    java -jar "$APKTOOL_JAR" b "$FOLDER_MODIF" -o "$APK_HASIL"
-
-    if [ $? -ne 0 ]; then
-        echo -e "\n${RED}❌ GAGAL Rebuild APK! Coba cek log error di atas.${NC}"
-        return 1
-    fi
-
-    echo -e "\n${GREEN}🎉 SUKSES REBUILD! Filenya adalah: ${YELLOW}$APK_HASIL${NC}"
-    
-    # Otomatis lanjut ke proses Tanda Tangan (Sign)
-    tanda_tangan_apk "$APK_HASIL"
-}
-
-# Fungsi buat tanda tangan (sign) APK
-tanda_tangan_apk() {
-    local APK_TARGET="$1"
-    echo -e "\n${YELLOW}✍️ Lanjut proses tanda tangan (Sign) untuk '$APK_TARGET'...${NC}"
-
-    if [ ! -f "$SIGN_SCRIPT" ]; then
-        echo -e "${RED}❌ ERROR: Script '$SIGN_SCRIPT' gak ketemu!${NC}"
-        echo -e ">> Pastikan '$SIGN_SCRIPT' ada di folder yang sama dan bisa dieksekusi.${NC}"
-        return 1
-    fi
-
-    # Memberi izin eksekusi jika belum ada
-    chmod +x "$SIGN_SCRIPT"
-    
-    "$SIGN_SCRIPT" "$APK_TARGET"
-
-    if [ $? -eq 0 ]; then
-        local SIGNED_APK="${APK_TARGET%.apk}-SIGNED.apk"
-        echo -e "\n${GREEN}✅ MANTAP JIWA! APK sudah di-sign dan siap install: ${YELLOW}$SIGNED_APK${NC}"
     else
-        echo -e "\n${RED}❌ GAGAL Menandatangani APK! Cek error dari script sign.${NC}"
+        echo -e "\n${RED}❌ GAGAL Membongkar APK! Cek log error di atas dan di file log untuk detail.${NC}"
+        return
     fi
 }
 
 
-# =================================================
-#                 PROGRAM UTAMA
-# =================================================
+# --- [4] BLOK EKSEKUSI UTAMA (MANAJER) ---
 
-# Cek dulu alatnya sekali di awal
-cek_alat_tempur
+# Persiapan awal
+setup_lingkungan
+tampilkan_header
+cek_dependensi
 
-# Looping menu utama
+# Loop menu utama
 while true; do
-    tampilkan_header
-    echo -e "Pilih mau ngapain, bos:"
-    echo -e " ${GREEN}1.${NC} Bongkar APK (Decompile)"
-    echo -e " ${GREEN}2.${NC} Pasang APK dari Folder (Rebuild & Sign)"
-    echo -e " ${RED}0.${NC} Keluar"
-    echo "--------------------------------------------------"
-    read -p "Pilihanmu: " PILIHAN
+    echo -e "\n${GREEN}${BOLD}--- MENU UTAMA ---${NC}"
+    echo "1. Bongkar, Edit, dan Pasang APK (Alur Lengkap)"
+    echo "2. Pasang Ulang dari Folder Proyek yang Ada"
+    echo "9. Keluar"
+    read -p ">> Masukkan pilihan: " choice
 
-    case $PILIHAN in
+    case $choice in
         1)
             bongkar_apk
             ;;
         2)
-            pasang_apk
+            # Logika untuk rebuild dari folder yang sudah ada (bisa ditambahkan di sini)
+            tampilkan_header
+            read -p ">> Masukkan path folder proyek di '$WORKSPACE_DIR': " FOLDER_PROYEK
+            if [ -d "$FOLDER_PROYEK" ]; then
+                if validasi_xml "$FOLDER_PROYEK"; then
+                    pasang_apk "$FOLDER_PROYEK"
+                fi
+            else
+                echo -e "${RED}❌ Folder tidak ditemukan!${NC}"
+            fi
             ;;
-        0)
-            echo -e "\n${BLUE}Oke, cabut dulu. Makasih udah mampir!${NC}"
+        9)
+            echo -e "\n${BLUE}Terima kasih telah menggunakan Pro Workflow Engine! Sampai jumpa lagi!${NC}"
             exit 0
             ;;
         *)
-            echo -e "\n${RED}Pilihan ngaco! Cuma ada 1, 2, atau 0.${NC}"
+            echo -e "\n${RED}Pilihan tidak valid, cuy! Coba lagi.${NC}"
             ;;
     esac
-
-    echo -e "\n${YELLOW}Tekan [ENTER] untuk kembali ke menu utama...${NC}"
-    read -p ""
+    echo -e "\n${YELLOW}Tekan [ENTER] untuk kembali ke menu utama...${NC}"; read -p ""
+    tampilkan_header
 done
