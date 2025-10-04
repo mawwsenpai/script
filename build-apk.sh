@@ -3,41 +3,53 @@
 # =======================================================
 #               BUILD-APK.SH - Modul Build dari Source Code
 # Didesain profesional untuk membangun APK dari ZIP Project Gradle.
+# Sekarang dengan Multi-Path File Check.
 # =======================================================
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 export PATH="$HOME/script:$PATH" 
 BUILD_ROOT="$HOME/script/build-projects"
+DOWNLOAD_PATH="$HOME/storage/downloads"
+STORAGE_PATH="$HOME/storage/shared"
 
 echo -e "=================================================="
 echo -e "${BLUE}🏗️  BUILD-APK.SH | Membuat APK dari Source Code ZIP ${NC}"
 echo -e "=================================================="
 
-# 1. Cek Kesiapan Tool Wajib (Profesional Check)
+# 1. Cek Kesiapan Tool Wajib
 if ! command -v java &> /dev/null; then
     echo -e "${RED}❌ ERROR: Java (JDK) belum terinstal. Jalankan Menu 0 dulu!${NC}"
     exit 1
 fi
-if ! command -v unzip &> /dev/null; then
-    echo -e "${RED}❌ ERROR: Paket 'unzip' belum terinstal. Jalankan Menu 0 (install-gradle.sh) dulu!${NC}"
-    exit 1
-fi
-if [ ! -d "$HOME/storage/downloads" ]; then
-    echo -e "${RED}❌ ERROR: Akses storage belum ada. Jalankan 'termux-setup-storage'.${NC}"
+# Asumsi paket build tools (unzip, aapt, dx) sudah diinstal di main.sh
+
+# 2. Pengecekan Lokasi File ZIP (Multi-Path Check Stabil)
+echo -e "\n${YELLOW}Contoh: Cukup ketik nama file, misal: ${BLUE}Project.zip${NC}"
+read -p ">> Masukkan NAMA FILE ZIP (Contoh: RevisiPro.zip): " ZIP_FILE
+
+if [ -z "$ZIP_FILE" ]; then
+    echo -e "${RED}❌ ERROR: Nama file ZIP tidak boleh kosong!${NC}"
     exit 1
 fi
 
-# 2. Pengecekan Lokasi File ZIP
-echo -e "\n${YELLOW}Contoh lokasi file ZIP: ${BLUE}~/storage/downloads/MyApp.zip${NC}"
-read -p ">> Masukkan PATH LENGKAP FILE ZIP: " ZIP_PATH
-
-if [ ! -f "$ZIP_PATH" ]; then
-    echo -e "${RED}❌ ERROR: File ZIP tidak ditemukan di '$ZIP_PATH'!${NC}"
+# Cek file di 3 lokasi stabil
+if [ -f "$ZIP_FILE" ]; then
+    ZIP_PATH="$ZIP_FILE"
+    echo -e "${GREEN}✅ Ditemukan di: Folder Proyek (${ZIP_PATH})${NC}"
+elif [ -f "$DOWNLOAD_PATH/$ZIP_FILE" ]; then
+    ZIP_PATH="$DOWNLOAD_PATH/$ZIP_FILE"
+    echo -e "${GREEN}✅ Ditemukan di: Folder Download (${DOWNLOAD_PATH}/...)${NC}"
+elif [ -f "$STORAGE_PATH/$ZIP_FILE" ]; then
+    ZIP_PATH="$STORAGE_PATH/$ZIP_FILE"
+    echo -e "${GREEN}✅ Ditemukan di: Folder Internal Utama (${STORAGE_PATH}/...)${NC}"
+else
+    echo -e "${RED}❌ ERROR: File ZIP '$ZIP_FILE' tidak ditemukan di 3 lokasi wajib!${NC}"
+    echo -e ">> Pastikan file ada di folder ini: ${YELLOW}$HOME/script/${NC} atau di folder ${YELLOW}Download${NC} HP kamu!"
     exit 1
 fi
 
 # 3. Ekstraksi dan Persiapan Build
-PROJECT_NAME=$(basename "$ZIP_PATH" .zip)
+PROJECT_NAME=$(basename "$ZIP_FILE" .zip)
 PROJECT_DIR="$BUILD_ROOT/$PROJECT_NAME"
 
 # Hapus folder lama (Clean up profesional)
