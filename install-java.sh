@@ -1,52 +1,63 @@
-#!/bin/bash
-
-# =======================================================
-#               INSTALL-JAVA.SH - AUTO-DETECT STABIL
-# Script ini secara otomatis mencari dan menginstal versi JDK
-# yang paling stabil dan tersedia di Termux.
-# =======================================================
-
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
-# Daftar paket Java (JDK) yang paling sering tersedia, diurutkan dari baru ke lama/stabil
-JDK_PACKAGES=("openjdk-17" "openjdk-11" "openjdk-8" "openjdk")
-WGET_PACKAGE="wget"
+# Daftar paket Java dan versi yang tersedia
+declare -A JDK_OPTIONS
+JDK_OPTIONS[1]="openjdk-21"
+JDK_OPTIONS[2]="openjdk-17"
+JDK_OPTIONS[3]="openjdk-11"
+JDK_OPTIONS[4]="openjdk-8"
+JDK_OPTIONS[5]="openjdk" # Versi generik
 
+# 1. Pengecekan Awal
 echo -e "${YELLOW}⚙️  [CEK] Memastikan Sistem dan Repositori Stabil...${NC}"
 pkg update -y && pkg upgrade -y
 
-# Pengecekan apakah Java sudah terinstal
 if command -v java &> /dev/null
 then
     echo -e "${GREEN}✅ SUKSES! Java sudah terinstal stabil. Skip instalasi.${NC}"
     exit 0
 fi
 
-echo -e "\n${YELLOW}🛠️  [AUTO-DETECT] Mencari versi JDK yang cocok untuk Termux kamu...${NC}"
+# 2. Tampilkan Menu Pilihan JDK
+while true; do
+    clear
+    echo -e "=================================================="
+    echo -e "${BLUE}💡 PILIH VERSI JDK STABIL (Untuk Apktool/Gradle) ${NC}"
+    echo -e "=================================================="
+    echo -e "${YELLOW}PILIH DENGAN TELITI, CUYY! (Pilih yang PALING kamu yakini cocok)${NC}"
 
-INSTALLED=false
-for JDK_NAME in "${JDK_PACKAGES[@]}"; do
-    echo -e "${BLUE}>> Mencoba instalasi: $JDK_NAME...${NC}"
+    for key in "${!JDK_OPTIONS[@]}"; do
+        echo -e "  ${GREEN}$key.${NC} ${JDK_OPTIONS[$key]} "
+    done
     
-    # Mencoba instalasi paket JDK dan WGET
-    if pkg install "$JDK_NAME" "$WGET_PACKAGE" -y; then
-        echo -e "${GREEN}✅ SUKSES! $JDK_NAME berhasil diinstal.${NC}"
-        INSTALLED=true
-        break # Berhasil, hentikan pencarian!
+    echo -e "\n${RED}9. Ganti Mirror Repositori Termux (Jika instalasi gagal terus)${NC}"
+    
+    read -p $'\n>> Masukkan Pilihan Nomer: ' choice
+
+    if [[ ${JDK_OPTIONS[$choice]} ]]; then
+        SELECTED_JDK=${JDK_OPTIONS[$choice]}
+        break
+    elif [ "$choice" == "9" ]; then
+        echo -e "\n${BLUE}Mengalihkan ke pengaturan repositori...${NC}"
+        termux-change-repo
+        # Setelah ganti repo, lanjutkan pengecekan instalasi
     else
-        echo -e "${RED}❌ $JDK_NAME gagal ditemukan atau diinstal. Mencoba versi lain...${NC}"
+        echo -e "\n${RED}❌ Pilihan gajelas, cuyy! Coba lagi.${NC}"
+        sleep 2
     fi
 done
 
-# Pengecekan Final
-if [ "$INSTALLED" = true ]; then
-    echo -e "\n${GREEN}✅ SUKSES! JDK dan Wget siap! ${NC}"
+# 3. Instalasi Final
+echo -e "\n${YELLOW}🛠️  Instalasi Final: $SELECTED_JDK dan Wget...${NC}"
+
+if pkg install "$SELECTED_JDK" wget -y; then
+    echo -e "\n${GREEN}✅ SUKSES! $SELECTED_JDK berhasil diinstal.${NC}"
+    echo -e "\n${BLUE}=================================================="
+    echo "Instalasi Java Selesai. Lanjut instal Apktool!"
+    echo "==================================================${NC}"
+    exit 0
 else
-    echo -e "\n${RED}❌ ERROR KRITIS: Semua upaya instalasi Java GAGAL.${NC}"
-    echo -e ">> Solusi: Repository kamu mungkin bermasalah. Coba ganti mirror: 'termux-change-repo'."
+    echo -e "\n${RED}❌ ERROR KRITIS: $SELECTED_JDK GAGAL diinstal. ${NC}"
+    echo ">> Coba lagi, dan pilih opsi 'Ganti Mirror Repositori' (Nomer 9)!"
     exit 1
 fi
-
-echo -e "\n${BLUE}=================================================="
-echo "Instalasi Java Selesai. Lanjut instal Apktool!"
-echo "==================================================${NC}"
