@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-#                 MAWW SCRIPT V10.1 - AUTO EDITION (STABLE)
+#                 MAWW SCRIPT V11 - FINAL EDITION
 # ==============================================================================
 # Deskripsi:
-#   Versi dengan perbaikan sintaksis untuk memastikan kompatibilitas dan
-#   stabilitas di semua lingkungan shell. Semua fungsi ditulis dalam format
-#   multi-baris yang benar.
+#   Versi final dengan URL redirect yang sudah dikonfigurasi.
+#   Ini adalah versi paling stabil dan lengkap.
 # ==============================================================================
 
 # --- [ KONFIGURASI PENGGUNA ] ---
 #
-# !!! PENTING: Ganti URL di bawah ini dengan URL GitHub Pages Anda !!!
+# URL GitHub Pages Anda sudah dimasukkan di sini.
 #
-readonly GITHUB_PAGES_URL="https://mawwsenpao.github.io/script/hacked/index.html"
+readonly GITHUB_PAGES_URL="https://mawwsenpai.github.io/script/hacked/"
 
 
 # --- [ KONFIGURASI SCRIPT & GLOBAL ] ---
@@ -184,7 +183,6 @@ function cleanup() {
 
 function _generate_python_script_auto_auth() {
     source "$CONFIG_FILE"
-    # (Isi fungsi ini sama persis seperti V10, tidak perlu diubah)
     cat << EOF > "$PYTHON_SCRIPT"
 # -*- coding: utf-8 -*-
 import os, sys, subprocess, logging, base64, time
@@ -301,7 +299,7 @@ function display_header() {
         status_text="${C_RED}TIDAK AKTIF${C_RESET}"
     fi
     echo -e "${C_PURPLE}╭───────────────────────────────────────────────────╮${C_RESET}"
-    echo -e "${C_PURPLE}│${C_WHITE}      MAWW SCRIPT V10.1 - AUTO EDITION         ${C_PURPLE}│${C_RESET}"
+    echo -e "${C_PURPLE}│${C_WHITE}      MAWW SCRIPT V11 - FINAL EDITION          ${C_PURPLE}│${C_RESET}"
     echo -e "${C_PURPLE}├───────────────────────────────────────────────────┤${C_RESET}"
     echo -e "${C_PURPLE}│ ${C_CYAN}Status   :${C_RESET} ${status_text} ${pid_text}                   ${C_PURPLE}│${C_RESET}"
     echo -e "${C_PURPLE}╰───────────────────────────────────────────────────╯${C_RESET}"
