@@ -1,148 +1,191 @@
 #!/bin/bash
 
-# =====================================================================
-#                BUILD-APK.SH v2.0 - Smart Project Builder
-#   Script ini mengotomatiskan proses build dari source code ZIP
-#          menjadi file APK menggunakan Gradle Wrapper.
-# =====================================================================
+# ============================================================================
+#              BUILD-APK.SH v5.0 - The Complete Build Suite
+#     Script lengkap yang menganalisis, membangun, dan menandatangani
+#             proyek Android dari source code ZIP secara cerdas.
+# ============================================================================
 
-# --- Palet Warna & Konfigurasi ---
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+# --- [1] KONFIGURASI ---
+# Sesuaikan path di bawah ini jika perlu
+readonly OUTPUT_DIR="$HOME/storage/shared/MawwScript/built"
+readonly LOG_DIR="$HOME/storage/shared/MawwScript/logs"
+# Pastikan uber-apk-signer.jar ada di sini. Instal dengan setup-modding.sh
+readonly SIGNER_JAR="$HOME/tools/uber-apk-signer.jar"
 
-# Folder temporary untuk proses unzip dan build (akan dihapus setelah selesai)
-BUILD_DIR="$HOME/build_temp"
+# --- [2] UI & UTILITY ---
+# Palet Warna & Style
+RED='\033[1;31m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'; BLUE='\033[1;34m'; NC='\033[0m'
+CYAN='\033[1;36m'; BOLD=$(tput bold); NORMAL=$(tput sgr0)
 
-# Folder tujuan untuk menyimpan hasil akhir APK yang sudah jadi
-OUTPUT_DIR="$HOME/storage/shared/MawwScript/built"
+# Folder temp unik, akan dihapus otomatis oleh 'trap'
+BUILD_DIR="$HOME/build_temp_$(date +%s)"
 
-# Lokasi pencarian file ZIP
-DOWNLOAD_PATH="$HOME/storage/downloads"
-STORAGE_PATH="$HOME/storage/shared"
+cleanup() {
+  echo -e "\n${YELLOW}🧹 Membersihkan lingkungan build sementara...${NC}"
+  rm -rf "$BUILD_DIR"
+}
+trap cleanup EXIT
 
-# =================================================
-#                 PROGRAM UTAMA
-# =================================================
+print_header() {
+    clear
+    echo -e "${CYAN}${BOLD}"
+    echo "  ╔══════════════════════════════════════════════════════╗"
+    echo "  ║       🚀  BUILD-APK v5.0 - The Complete Suite  🚀      ║"
+    echo "  ╚══════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
 
-clear
-echo -e "${BLUE}--- Build APK dari Source Code ZIP ---${NC}"
+log_step() { echo -e "\n${BLUE}${BOLD}--- [LANGKAH $1] $2 ---${NC}"; }
+log_info() { echo -e "  ${CYAN}ℹ️  $1${NC}"; }
+log_success() { echo -e "  ${GREEN}✔  $1${NC}"; }
+log_error() { echo -e "  ${RED}✖  $1${NC}"; }
 
-# 1. Cek Kebutuhan Dasar
-if ! command -v java &> /dev/null || ! command -v unzip &> /dev/null; then
-    echo -e "\n${RED}❌ ERROR: Kebutuhan dasar belum terpenuhi!${NC}"
-    echo ">> Pastikan ${YELLOW}Java (openjdk)${NC} dan ${YELLOW}unzip${NC} sudah terinstal."
-    echo ">> Jalankan: pkg install openjdk-17 unzip"
-    exit 1
-fi
+get_gradle_value() {
+    grep -E "$1" "$2" | head -n 1 | sed -E "s/.*[ =] ?['\"]?([0-9A-Za-z\._-]+)['\"]?.*/\1/"
+}
 
-# 2. Cari File ZIP (Dibuat Pinter Biar Gak Salah Path)
-read -p ">> Masukkan NAMA FILE ZIP (Contoh: MyGame.zip): " ZIP_FILE
-if [ -z "$ZIP_FILE" ]; then
-    echo -e "${RED}❌ ERROR: Nama file jangan kosong!${NC}"; exit 1
-fi
+# --- [3] FUNGSI INTI ---
 
-ZIP_PATH=""
-if [ -f "$ZIP_FILE" ]; then
-    ZIP_PATH="$ZIP_FILE"
-    echo -e "${GREEN}✅ Ditemukan di: Folder Proyek${NC}"
-elif [ -f "$DOWNLOAD_PATH/$ZIP_FILE" ]; then
-    ZIP_PATH="$DOWNLOAD_PATH/$ZIP_FILE"
-    echo -e "${GREEN}✅ Ditemukan di: Folder Download${NC}"
-elif [ -f "$STORAGE_PATH/$ZIP_FILE" ]; then
-    ZIP_PATH="$STORAGE_PATH/$ZIP_FILE"
-    echo -e "${GREEN}✅ Ditemukan di: Folder Internal Utama${NC}"
-else
-    echo -e "${RED}❌ ERROR: File '$ZIP_FILE' kaga ketemu di mana-mana!${NC}"
-    exit 1
-fi
+# Fungsi untuk memeriksa semua kebutuhan sistem
+check_system_deps() {
+    log_step 1 "Memeriksa Kesiapan Sistem"
+    local all_ok=true
+    if ! command -v java &> /dev/null || [ -z "$ANDROID_HOME" ] || ! command -v unzip &> /dev/null; then
+        log_error "Kebutuhan dasar (Java, ANDROID_HOME, Unzip) tidak terpenuhi."
+        all_ok=false
+    else
+        log_success "Kebutuhan dasar (Java, ANDROID_HOME, Unzip) OK."
+    fi
 
-# 3. Persiapan Lingkungan Build
-echo -e "\n${YELLOW}⚙️  Mempersiapkan lingkungan build yang bersih...${NC}"
-# Hapus sisa build lama dan buat folder baru yang bersih
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
-mkdir -p "$OUTPUT_DIR"
-echo -e "${GREEN}✅ Lingkungan build siap di '$BUILD_DIR'${NC}"
+    if [ ! -f "$SIGNER_JAR" ]; then
+        log_error "Uber APK Signer tidak ditemukan di '$SIGNER_JAR'."
+        log_info "Jalankan 'setup-modding.sh' untuk menginstalnya."
+        all_ok=false
+    else
+        log_success "Uber APK Signer OK."
+    fi
 
-# 4. Unzip Proyek
-echo -e "\n${YELLOW}📦 Mengekstrak file dari '$ZIP_FILE'...${NC}"
-if ! unzip -q "$ZIP_PATH" -d "$BUILD_DIR"; then
-    echo -e "${RED}❌ GAGAL Ekstrak! File ZIP mungkin rusak atau korup.${NC}"
-    rm -rf "$BUILD_DIR" # Bersihkan sampah
-    exit 1
-fi
-echo -e "${GREEN}✅ Proyek berhasil diekstrak.${NC}"
+    ! $all_ok && exit 1
+}
 
-# 5. Cari Folder Proyek & Beri Izin (INI BAGIAN KRITISNYA)
-# Pindah ke direktori build untuk mempermudah pencarian
-cd "$BUILD_DIR"
+# Fungsi untuk mendapatkan path file ZIP dari argumen atau prompt
+get_zip_input() {
+    if [ -n "$1" ]; then
+        log_info "File ZIP terdeteksi dari argumen: $1"
+        ZIP_FILE="$1"
+    else
+        read -p ">> Masukkan NAMA FILE ZIP (Contoh: MyGame.zip): " ZIP_FILE
+    fi
 
-# Cari di mana letak file 'gradlew' berada
-PROJECT_ROOT=$(find . -name "gradlew" -type f -exec dirname {} \; | head -n 1)
+    [ -z "$ZIP_FILE" ] && { log_error "Nama file tidak boleh kosong!"; exit 1; }
 
-if [ -z "$PROJECT_ROOT" ]; then
-    echo -e "${RED}❌ GAGAL! Tidak ditemukan file 'gradlew' di dalam ZIP.${NC}"
-    echo -e "${YELLOW}>> Pastikan file ZIP berisi source code proyek Android yang valid.${NC}"
-    cd ..
-    rm -rf "$BUILD_DIR"
-    exit 1
-fi
+    ZIP_PATH=""
+    for dir in "." "$HOME/storage/downloads" "$HOME/storage/shared"; do
+        [ -f "$dir/$ZIP_FILE" ] && { ZIP_PATH="$dir/$ZIP_FILE"; break; }
+    done
 
-echo -e "\n${YELLOW}🔍 Folder proyek terdeteksi di: '$PROJECT_ROOT'${NC}"
-# Pindah ke folder proyek yang sebenarnya
-cd "$PROJECT_ROOT"
+    [ -z "$ZIP_PATH" ] && { log_error "File '$ZIP_FILE' tidak ditemukan!"; exit 1; }
+    log_success "File ditemukan: $ZIP_PATH"
+}
 
-echo -e "${YELLOW}🔑 Memberikan izin eksekusi untuk 'gradlew'... (Perbaikan Kritis!)${NC}"
-chmod +x gradlew
-echo -e "${GREEN}✅ Izin diberikan.${NC}"
+# --- [4] PROGRAM UTAMA ---
 
-# 6. Proses Build dengan Gradle
-echo -e "\n${BLUE}=================================================="
-echo "🚀 MEMULAI PROSES BUILD DENGAN GRADLE 🚀"
-echo "Proses ini bisa makan waktu LAMA dan butuh koneksi internet stabil."
-echo "Sabar ya, cuy... Bikin kopi dulu aja."
-echo -e "==================================================${NC}"
+main() {
+    print_header
+    check_system_deps
 
-# Menjalankan perintah build untuk versi 'Release'
-if ./gradlew assembleRelease; then
-    echo -e "\n${GREEN}🎉 BUILD BERHASIL! 🎉${NC}"
-else
-    echo -e "\n${RED}=================================================="
-    echo "❌ BUILD GAGAL TOTAL! ❌"
-    echo "Penyebab umum: Masalah di source code, versi Gradle tidak cocok, atau koneksi internet putus."
-    echo -e "==================================================${NC}"
-    cd ..; cd ..
-    rm -rf "$BUILD_DIR"
-    exit 1
-fi
+    log_step 2 "Input & Ekstraksi Proyek"
+    get_zip_input "$1"
+    mkdir -p "$BUILD_DIR" "$OUTPUT_DIR" "$LOG_DIR"
+    log_info "Mengekstrak source code..."
+    unzip -q "$ZIP_PATH" -d "$BUILD_DIR" || { log_error "Gagal ekstrak ZIP! File mungkin rusak."; exit 1; }
 
-# 7. Cari & Pindahkan APK Hasil Build
-echo -e "\n${YELLOW}🔍 Mencari file APK hasil build...${NC}"
-# APK release biasanya ada di app/build/outputs/apk/release/
-BUILT_APK=$(find . -name "*-release.apk" | head -n 1)
+    PROJECT_ROOT=$(find "$BUILD_DIR" -name "gradlew" -type f -exec dirname {} \; | head -n 1)
+    [ -z "$PROJECT_ROOT" ] && { log_error "Ini bukan proyek Android (tidak ditemukan 'gradlew')."; exit 1; }
+    log_success "Proyek valid, memulai analisis..."
 
-if [ -z "$BUILT_APK" ]; then
-    echo -e "${RED}❌ Aneh! Build sukses tapi file APK-nya gak ketemu.${NC}"
-    cd ..; cd ..
-    rm -rf "$BUILD_DIR"
-    exit 1
-fi
+    # Analisis Proyek
+    GRADLE_PROPS_FILE="$PROJECT_ROOT/gradle/wrapper/gradle-wrapper.properties"
+    BUILD_GRADLE_FILE=$(find "$PROJECT_ROOT" -name "build.gradle" -o -name "build.gradle.kts" | grep "app/build.gradle" | head -n 1)
+    REQ_GRADLE_VER=$(grep "distributionUrl" "$GRADLE_PROPS_FILE" | sed -n 's/.*gradle-\(.*\)-all.*/\1/p')
+    REQ_COMPILE_SDK=$(get_gradle_value "compileSdk(Version)?" "$BUILD_GRADLE_FILE")
+    
+    # Menampilkan Laporan
+    log_step 3 "Laporan Analisis Proyek"
+    echo "---------------------------------------------------------------------"
+    printf '%-25s %-25s %-20s\n' "${BOLD}Kebutuhan Proyek${NORMAL}" "${BOLD}Status Sistem Anda${NORMAL}" "${BOLD}Kecocokan${NORMAL}"
+    echo "---------------------------------------------------------------------"
+    printf '%-25s %-25s %-20s\n' "Versi Gradle: $REQ_GRADLE_VER" "(Diunduh Otomatis)" "${GREEN}[✔ OKE]${NC}"
+    
+    SDK_PATH="$ANDROID_HOME/platforms/android-$REQ_COMPILE_SDK"
+    if [ -d "$SDK_PATH" ]; then
+        printf '%-25s %-25s %-20s\n' "Compile SDK: $REQ_COMPILE_SDK" "Terinstal" "${GREEN}[✔ COCOK]${NC}"; SDK_OK=true
+    else
+        printf '%-25s %-25s %-20s\n' "Compile SDK: $REQ_COMPILE_SDK" "Tidak Ditemukan" "${RED}[✘ GAGAL]${NC}"; SDK_OK=false
+    fi
+    echo "---------------------------------------------------------------------"
 
-# Ambil nama proyek dari nama zip untuk penamaan file akhir
-PROJECT_NAME=$(basename "$ZIP_FILE" .zip)
-FINAL_APK_PATH="$OUTPUT_DIR/${PROJECT_NAME}-built.apk"
+    ! $SDK_OK && { log_error "Sistem tidak kompatibel. Install SDK Platform yang dibutuhkan."; exit 1; }
+    
+    log_step 4 "Konfigurasi Build"
+    echo "Pilih jenis build yang diinginkan:"
+    select BUILD_CHOICE in "Release" "Debug" "Clean dan Release"; do
+        case $BUILD_CHOICE in
+            "Release" ) BUILD_TASK="assembleRelease"; break;;
+            "Debug" ) BUILD_TASK="assembleDebug"; break;;
+            "Clean dan Release" ) BUILD_TASK="clean assembleRelease"; break;;
+            * ) echo "Pilihan tidak valid.";;
+        esac
+    done
 
-echo -e "${GREEN}✅ APK ditemukan di '$BUILT_APK'${NC}"
-echo -e "${YELLOW}🚚 Memindahkan APK ke folder output...${NC}"
-mv "$BUILT_APK" "$FINAL_APK_PATH"
+    # Proses Build
+    log_step 5 "Proses Build & Logging"
+    cd "$PROJECT_ROOT" || exit
+    chmod +x gradlew
+    
+    LOG_FILE="$LOG_DIR/$(basename "$ZIP_FILE" .zip)_build_$(date +%F-%H%M).log"
+    log_info "Memulai build '$BUILD_TASK'... Proses ini bisa lama."
+    log_info "Log lengkap disimpan di: $LOG_FILE"
+    
+    if ./gradlew $BUILD_TASK > "$LOG_FILE" 2>&1; then
+        log_success "BUILD BERHASIL!"
+    else
+        log_error "BUILD GAGAL TOTAL!"
+        log_info "Silakan periksa detail error di file log:"
+        echo -e "${YELLOW}$LOG_FILE${NC}"
+        tail -n 20 "$LOG_FILE"
+        exit 1
+    fi
 
-# 8. Bersih-bersih & Laporan Akhir
-echo -e "\n${YELLOW}🧹 Membersihkan file temporary...${NC}"
-cd ..; cd .. # Balik ke direktori awal
-rm -rf "$BUILD_DIR"
+    # Finalisasi dan Signing
+    log_step 6 "Finalisasi & Signing"
+    APK_SUFFIX=$( [[ "$BUILD_TASK" == *"Debug"* ]] && echo "debug.apk" || echo "release-unsigned.apk" )
+    BUILT_APK=$(find . -name "*-$APK_SUFFIX" | head -n 1)
+    [ -z "$BUILT_APK" ] && { log_error "Build sukses tapi file APK tidak ditemukan!"; exit 1; }
+    
+    read -p ">> Build berhasil. Apakah Anda ingin menandatangani (sign) APK ini? (y/n): " confirm_sign
+    if [[ "$confirm_sign" == "y" || "$confirm_sign" == "Y" ]]; then
+        log_info "Menjalankan Uber APK Signer..."
+        if java -jar "$SIGNER_JAR" -a "$BUILT_APK" --overwrite; then
+            log_success "APK berhasil ditandatangani!"
+            SIGNED_APK_PATH=$(echo "$BUILT_APK" | sed 's/-unsigned//g' | sed 's/\.apk/-signed.apk/g')
+        else
+            log_error "Proses signing gagal!"; exit 1
+        fi
+    else
+        log_info "Proses signing dilewati."
+        SIGNED_APK_PATH="$BUILT_APK"
+    fi
+    
+    PROJECT_NAME=$(basename "$ZIP_FILE" .zip)
+    FINAL_APK_PATH="$OUTPUT_DIR/${PROJECT_NAME}-$(date +%F).apk"
+    mv "$SIGNED_APK_PATH" "$FINAL_APK_PATH"
 
-echo -e "\n${GREEN}=================================================="
-echo "✅ SEMUA SELESAI! APK SUDAH JADI! ✅"
-echo "=================================================="
-echo -e "File final lo udah siap di:"
-echo -e "${YELLOW}$FINAL_APK_PATH${NC}"
-echo -e "\n${BLUE}Langkah selanjutnya: Jalankan 'sign-apk.sh' untuk menandatangani APK ini sebelum diinstal.${NC}"
+    log_step 7 "SELESAI"
+    log_success "SEMUA PROSES BERHASIL!"
+    echo -e "\n${GREEN}${BOLD}File final Anda siap di:${NC}\n${YELLOW}$FINAL_APK_PATH${NC}\n"
+}
+
+# Jalankan program utama dengan semua argumen yang diberikan
+main "$@"
