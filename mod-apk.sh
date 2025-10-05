@@ -1,44 +1,59 @@
 #!/bin/bash
 # ===================================================================
-#           🔧 MOD-APK.SH v10.1 - The Definitive Suite 🔧
+#           🔧 MOD-APK.SH v11.0 - The Final Suite 🔧
 #
-#   Perbaikan: Mengembalikan dan meningkatkan fitur pencarian APK
-#   otomatis di berbagai direktori umum.
+#   Versi final yang lengkap, menggabungkan semua fitur:
+#   Pencarian APK cerdas, Asisten AI Lokal, menu modding lengkap,
+#   dan integrasi Gemini API (opsional) untuk analisis kode.
 # ===================================================================
 
 # --- [1] KONFIGURASI ---
+# Harap sesuaikan semua path di bawah ini agar sesuai dengan sistem Anda.
+# --------------------------------------------------------------------
+# Lokasi alat tempur utama
 readonly APKTOOL_JAR="$HOME/script/apktool.jar"
 readonly SIGN_SCRIPT="$HOME/script/sign-apk.sh"
+
+# Direktori kerja (tempat menyimpan proyek hasil bongkaran)
 readonly WORKSPACE_DIR="$HOME/apk_projects"
 readonly LOG_DIR="$WORKSPACE_DIR/logs"
+
+# Direktori untuk script patcher otomatis (contoh: patch-pou.sh)
 readonly PATCHER_DIR="$HOME/script/game"
+
+# [OPSIONAL] Konfigurasi untuk Integrasi AI Gemini
+# 1. Dapatkan API Key Anda dari Google AI Studio.
+# 2. Masukkan key tersebut di sini.
+# 3. Jika dikosongkan, fitur AI Gemini akan dinonaktifkan.
 readonly GEMINI_API_KEY="" # <--- PASTE API KEY ANDA DI SINI
+# --------------------------------------------------------------------
+
 
 # --- [2] FUNGSI UTILITY & UI ---
 
-# Fungsi logging terpusat
+# Fungsi logging terpusat untuk output yang konsisten dan berwarna.
 log_msg() {
     local type="$1" color_code="\033[0m" prefix=""
     case "$type" in
-        INFO)    prefix="[INFO]"    color_code="\033[0;36m" ;;
-        SUCCESS) prefix="[SUCCESS]" color_code="\033[0;32m" ;;
-        WARN)    prefix="[WARN]"    color_code="\033[0;33m" ;;
-        ERROR)   prefix="[ERROR]"   color_code="\033[0;31m" ;;
-        AI)      prefix="[AI-BOT]"  color_code="\033[0;35m" ;;
+        INFO)    prefix="[INFO]"    color_code="\033[0;36m" ;; # Cyan
+        SUCCESS) prefix="[SUCCESS]" color_code="\033[0;32m" ;; # Green
+        WARN)    prefix="[WARN]"    color_code="\033[0;33m" ;; # Yellow
+        ERROR)   prefix="[ERROR]"   color_code="\033[0;31m" ;; # Red
+        AI)      prefix="[AI-BOT]"  color_code="\033[0;35m" ;; # Magenta
     esac
     echo -e "$(date '+%H:%M:%S') ${color_code}${prefix}\033[0m $2"
 }
 
-# Menampilkan header script
+# Menampilkan header script.
 print_header() {
     clear
     echo -e "\033[0;34m==================================================================\033[0m"
-    echo -e "\033[0;32m       🔧 MOD-APK.SH v10.1 - The Definitive Suite 🔧\033[0m"
+    echo -e "\033[0;32m       🔧 MOD-APK.SH v11.0 - The Final Suite 🔧\033[0m"
     echo -e "\033[0;34m==================================================================\033[0m"
     echo -e "\033[0;33mWorkspace: $WORKSPACE_DIR\033[0m\n"
 }
 
-# Memeriksa semua dependensi
+# Memeriksa semua dependensi yang dibutuhkan sebelum script berjalan.
 check_deps() {
     log_msg INFO "Memeriksa semua alat tempur..."
     local all_ok=1
@@ -54,56 +69,49 @@ check_deps() {
     [ $all_ok -eq 0 ] && { log_msg ERROR "Sistem belum siap! Install kebutuhan di atas."; exit 1; }
 }
 
-# ==========================================================
-# FUNGSI BARU: PENCARIAN APK OTOMATIS
-# ==========================================================
+# Fungsi cerdas untuk mencari file APK di lokasi umum.
 find_apk_path() {
     local file_name="$1"
-    
-    # Daftar direktori yang akan diperiksa, urut dari yang paling umum
     local search_dirs=(
-        "."                             # Direktori saat ini (folder /script)
-        "$HOME/storage/downloads"       # Folder Download utama
-        "$HOME/storage/shared"          # Penyimpanan Internal
-        "$HOME/downloads"               # Folder Download Termux
-        ".."                            # Satu folder di atasnya
+        "."
+        "$HOME/storage/downloads"
+        "$HOME/storage/shared"
+        "$HOME/downloads"
+        ".."
     )
 
-    log_msg INFO "Mencari '$file_name'..."
+    log_msg INFO "Mencari '$file_name'..." >&2
+
     for dir in "${search_dirs[@]}"; do
         if [ -f "$dir/$file_name" ]; then
-            echo "$dir/$file_name" # Cetak path lengkap jika ketemu
-            return 0 # Keluar dengan status sukses
+            echo "$dir/$file_name"
+            return 0
         fi
     done
-    
-    return 1 # Keluar dengan status gagal jika tidak ditemukan
+    return 1
 }
-# ==========================================================
 
 
 # --- [3] FUNGSI ALUR KERJA UTAMA ---
 
+# Fungsi utama yang mengatur seluruh proses dari awal sampai akhir.
 main_workflow() {
     print_header
     read -p ">> Masukkan nama file APK (contoh: game.apk): " apk_file
     [ -z "$apk_file" ] && { log_msg ERROR "Nama file jangan kosong!"; return; }
     
-    # ==========================================================
-    # BAGIAN YANG DIPERBARUI: MENGGUNAKAN FUNGSI PENCARIAN
-    # ==========================================================
     local input_path
-    input_path=$(find_apk_path "$apk_file") # Panggil fungsi detektif
+    input_path=$(find_apk_path "$apk_file")
 
-    if [ $? -ne 0 ]; then # Cek apakah fungsi detektif berhasil atau gagal
+    if [ $? -ne 0 ]; then
         log_msg ERROR "File '$apk_file' tidak ditemukan di lokasi mana pun!"
         return
     fi
     
     log_msg SUCCESS "File ditemukan di: $input_path"
-    # ==========================================================
 
-    local apk_name=$(basename "$input_path" .apk)
+    local apk_name
+    apk_name=$(basename "$input_path" .apk)
     local project_dir="$WORKSPACE_DIR/${apk_name}-MODIF"
     local log_file="$LOG_DIR/${apk_name}_decompile_$(date +%F_%H-%M-%S).log"
 
@@ -117,7 +125,7 @@ main_workflow() {
         modding_menu "$project_dir"
 
         # Proses rebuild setelah modding selesai
-        if [ -d "$project_dir" ]; then # Cek apakah folder proyek masih ada (belum dihapus)
+        if [ -d "$project_dir" ]; then
             log_msg INFO "Memulai proses rebuild untuk '$apk_name'..."
             if validate_xml "$project_dir"; then
                 read -p ">> Masukkan nama file APK keluaran (tanpa .apk) [${apk_name}-Mod]: " custom_name
@@ -197,32 +205,32 @@ ai_assistant_local() {
             local target_files=$(grep -rlwE "loadAd|showAd|loadInterstitial" "$project_dir/smali*")
             if [ -z "$target_files" ]; then
                 log_msg WARN "AI: Tidak ditemukan metode iklan umum. Coba cari manual."
-                return
+                sleep 2; return
             fi
             
             echo "$target_files" | while read -r file; do
                 log_msg AI "Menganalisis potensi target di: \033[0;33m$file\033[0m"
-                # Cari baris method dan tambahkan 'return-void' setelahnya
                 local line_num=$(grep -nE "^\.method.*(loadAd|showAd|loadInterstitial)" "$file" | cut -d: -f1)
                 if [ -n "$line_num" ]; then
                     log_msg SUCCESS "AI: Menemukan metode target di baris $line_num."
                     echo -e "\033[0;31m- Kode iklan akan dieksekusi\033[0m"
                     echo -e "\033[0;32m+ Menambahkan 'return-void' untuk melumpuhkan metode\033[0m"
                     read -p ">> Terapkan patch ini? (y/n): " confirm
-                    if [[ "$confirm" == "y" ]]; then
+                    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
                         sed -i.bak "$((line_num+1)) a\ \n    return-void" "$file"
                         log_msg SUCCESS "AI: Patch berhasil diterapkan! (File asli disimpan sebagai .bak)"
+                    else
+                        log_msg INFO "AI: Patch dibatalkan."
                     fi
                 fi
             done
             ;;
         *'premium'*)
             log_msg AI "Oke, target: Premium. Mencari metode pengecekan seperti 'isPremium()Z'..."
-            # Cari metode yang mengembalikan boolean (Z) dan namanya 'isPremium' atau 'isPro'
             local target_files=$(grep -rlwE "isPremium\(\)Z|isPro\(\)Z" "$project_dir/smali*")
             if [ -z "$target_files" ]; then
                 log_msg WARN "AI: Tidak ditemukan metode premium umum. Coba cari manual."
-                return
+                sleep 2; return
             fi
 
             echo "$target_files" | while read -r file; do
@@ -235,12 +243,13 @@ ai_assistant_local() {
                     echo -e "\033[0;31m- Kode asli akan mengembalikan status premium saat ini.\033[0m"
                     echo -e "\033[0;32m+ Memaksa metode untuk SELALU mengembalikan 'true'.\033[0m"
                     read -p ">> Terapkan patch ini? (y/n): " confirm
-                    if [[ "$confirm" == "y" ]]; then
+                    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
                         local signature=$(sed -n "${method_start}p" "$file")
-                        # Hapus semua isi method dan ganti dengan kode baru
                         sed -i.bak "${method_start},${method_end}d" "$file"
                         echo -e "$signature\n    .locals 1\n\n    const/4 v0, 0x1\n\n    return v0\n.end method" >> "$file"
                         log_msg SUCCESS "AI: Patch berhasil diterapkan! (File asli disimpan sebagai .bak)"
+                    else
+                        log_msg INFO "AI: Patch dibatalkan."
                     fi
                 fi
             done
@@ -320,13 +329,11 @@ ai_gemini_explain() {
     if [ -z "$GEMINI_API_KEY" ]; then
         log_msg ERROR "API Key Gemini belum diatur di bagian Konfigurasi script!"
         log_msg ERROR "Fitur ini tidak bisa digunakan."
-        sleep 3
-        return
+        sleep 3; return
     fi
     if ! command -v jq &>/dev/null; then
         log_msg ERROR "Perintah 'jq' tidak ditemukan. Fitur ini memerlukannya. (pkg i jq)"
-        sleep 3
-        return
+        sleep 3; return
     fi
 
     print_header
@@ -335,21 +342,16 @@ ai_gemini_explain() {
     local full_path="$project_dir/$smali_file_path"
 
     if [ ! -f "$full_path" ]; then
-        log_msg ERROR "File tidak ditemukan: $full_path"
-        sleep 2
-        return
+        log_msg ERROR "File tidak ditemukan: $full_path"; sleep 2; return
     fi
 
     read -p ">> Masukkan nama metode yang ingin dianalisis (contoh: isPremium): " method_name
     
-    # Ekstrak seluruh blok metode dari file Smali
     local smali_code
     smali_code=$(awk "/\.method.*$method_name/,/\.end method/" "$full_path")
 
     if [ -z "$smali_code" ]; then
-        log_msg ERROR "Metode '$method_name' tidak ditemukan di dalam file."
-        sleep 2
-        return
+        log_msg ERROR "Metode '$method_name' tidak ditemukan di dalam file."; sleep 2; return
     fi
 
     log_msg AI "Mengirim kode ke Gemini untuk dianalisis..."
@@ -374,6 +376,9 @@ ai_gemini_explain() {
 # --- [5] EKSEKUSI UTAMA ---
 # Blok utama yang menjalankan script.
 main() {
+    # Buat direktori kerja jika belum ada
+    mkdir -p "$WORKSPACE_DIR" "$LOG_DIR"
+    
     check_deps
     while true; do
         print_header
@@ -393,3 +398,4 @@ main() {
 
 # Jalankan fungsi utama script.
 main
+
