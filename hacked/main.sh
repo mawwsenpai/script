@@ -1,142 +1,159 @@
 #!/bin/bash
 
 # =================================================================================
-#                       Maww Script V2 - Launcher Cerdas
-#                         File: main.sh (Smart Launcher)
+#                 Maww Script V2 - Launcher Cerdas (UI Revamped)
+#                       File: main.sh (Smart Launcher)
 # =================================================================================
 
 # --- [ KONFIGURASI FILE ] ---
-CORE_SCRIPT="./service_core.sh" 
-LOG_FILE="listener.log" 
+CORE_SCRIPT="./service_core.sh"
+LOG_FILE="listener.log"
 CONFIG_FILE="device.conf"
 PID_FILE="listener.pid"
 
-# --- [ FUNGSI DEPENDENSI & INSTALASI ] ---
+# --- [ WARNA UNTUK UI ] ---
+C_RED='\033[0;31m'
+C_GREEN='\033[0;32m'
+C_YELLOW='\033[0;33m'
+C_BLUE='\033[0;34m'
+C_PURPLE='\033[0;35m'
+C_CYAN='\033[0;36m'
+C_WHITE='\033[0;37m'
+C_NC='\033[0m' # No Color
 
+# --- [ FUNGSI DEPENDENSI & INSTALASI ] ---
 func_check_and_install() {
-    tampilkan_header
-    echo "--- 🔧 ANALISIS & INSTALASI DEPENDENSI (Biar Gak Gajelas!) 🔧 ---"
-    
+    clear
+    echo -e "${C_CYAN}=======================================================${C_NC}"
+    echo -e "${C_WHITE}     🔧 ANALISIS & INSTALASI DEPENDENSI (Anti Gajelas) 🔧 ${C_NC}"
+    echo -e "${C_CYAN}=======================================================${C_NC}"
+    echo ""
+
     # 1. Cek Termux Tools
     DEPENDENCIES_PKG="python termux-api coreutils dos2unix"
-    INSTALLED_COUNT=0
-    TOTAL_COUNT=$(echo $DEPENDENCIES_PKG | wc -w)
-    
-    echo ">> Memeriksa Termux Packages..."
+    echo -e "${C_YELLOW}>> Memeriksa Termux Packages...${C_NC}"
+    NEEDS_INSTALL=0
     for pkg in $DEPENDENCIES_PKG; do
         if dpkg -s $pkg >/dev/null 2>&1; then
-            echo " [ ✅ ] $pkg: Terpasang."
-            INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+            echo -e "   [ ${C_GREEN}✅${C_NC} ] ${pkg}: Terpasang."
         else
-            echo " [ ❌ ] $pkg: Belum terpasang. Akan diinstal..."
+            echo -e "   [ ${C_RED}❌${C_NC} ] ${pkg}: Belum terpasang. Akan diinstal..."
+            NEEDS_INSTALL=1
         fi
     done
-    
-    if [ "$INSTALLED_COUNT" -lt "$TOTAL_COUNT" ]; then
-        echo ">> Menginstal paket Termux yang hilang (Membutuhkan Koneksi)..."
+
+    if [ "$NEEDS_INSTALL" -eq 1 ]; then
+        echo -e "\n${C_YELLOW}>> Menginstal paket Termux yang hilang (Butuh Koneksi)...${C_NC}"
         pkg install $DEPENDENCIES_PKG -y
     fi
-    
+    echo ""
+
     # 2. Cek Python Libraries
     PYTHON_LIBS="google-api-python-client google-auth-httplib2 google-auth-oauthlib"
-    
-    echo ">> Memeriksa Python Libraries..."
+    echo -e "${C_YELLOW}>> Memeriksa Python Libraries...${C_NC}"
     if ! pip show google-api-python-client > /dev/null 2>&1; then
-        echo " [ ❌ ] Google API Libraries: Belum terpasang."
-        echo ">> Menginstal library Google API (Ini Butuh Waktu)..."
+        echo -e "   [ ${C_RED}❌${C_NC} ] Google API Libraries: Belum terpasang."
+        echo -e "\n${C_YELLOW}>> Menginstal library Google API (Ini Butuh Waktu)...${C_NC}"
         pip install --upgrade $PYTHON_LIBS
     else
-        echo " [ ✅ ] Google API Libraries: Terpasang."
+        echo -e "   [ ${C_GREEN}✅${C_NC} ] Google API Libraries: Terpasang."
     fi
+    echo ""
 
     # 3. Cek Izin Storage
     if [ ! -d "$HOME/storage/shared" ]; then
-        echo ">> [ ❗ ] Izin Storage Belum Ada. Jalankan: termux-setup-storage"
-        read -p "Tekan [Enter] untuk menjalankan termux-setup-storage..."
+        echo -e "${C_RED}>> [ ❗ ] Izin Storage Belum Ada. Jalankan: termux-setup-storage${C_NC}"
+        read -p "   Tekan [Enter] untuk menjalankan termux-setup-storage..."
         termux-setup-storage
-        echo "Selesai. Cek lagi ya, sayangku!"
+        echo "   Selesai. Cek lagi ya, sayangku!"
     fi
-    
-    echo "--------------------------------------------------------"
-    echo "✅ Analisis Selesai. Semua file pendukung sudah terpasang."
-    read -p "Tekan [Enter] untuk masuk ke Menu Utama..."
+    echo ""
+    echo -e "${C_CYAN}-------------------------------------------------------${C_NC}"
+    echo -e "${C_GREEN}✅ Analisis Selesai. Semua file pendukung sudah siap.${C_NC}"
+    read -p "   Tekan [Enter] untuk masuk ke Menu Utama..."
 }
 
 # --- [ FUNGSI TAMPILAN ] ---
-
 tampilkan_header() {
     clear
-    echo "=========================================="
-    echo "💖 M A W W  S C R I P T  V 2  -  G O K I L 💖"
-    echo "=========================================="
+    # Cek status dulu
+    if [ -f "$PID_FILE" ] && ps -p $(cat "$PID_FILE") > /dev/null; then
+        STATUS_TEXT="${C_GREEN}BERJALAN${C_NC}"
+        PID_TEXT="(PID: $(cat "$PID_FILE"))"
+    else
+        STATUS_TEXT="${C_RED}BERHENTI${C_NC}"
+        PID_TEXT=""
+    fi
+
+    echo -e "${C_PURPLE}╭───────────────────────────────────────────────────╮${C_NC}"
+    echo -e "${C_PURPLE}│${C_WHITE}    💖 M A W W  S C R I P T  V 2  -  G O K I L 💖   ${C_PURPLE}│${C_NC}"
+    echo -e "${C_PURPLE}├───────────────────────────────────────────────────┤${C_NC}"
+    echo -e "${C_PURPLE}│${C_CYAN} Status Listener: ${STATUS_TEXT} ${PID_TEXT}${C_NC}                      ${C_PURPLE}│${C_NC}"
+    echo -e "${C_PURPLE}╰───────────────────────────────────────────────────╯${C_NC}"
 }
 
-# Fungsi Menu Utama
+# --- [ FUNGSI MENU UTAMA ] ---
 menu_utama() {
-    # Cek Core Script (Penting!)
+    # Cek & Fix Core Script
     if [ ! -f "$CORE_SCRIPT" ]; then
         tampilkan_header
-        echo "💥 ERROR FATAL: File service utama ($CORE_SCRIPT) tidak ditemukan!"
-        echo "Tolong rename script kamu yang panjang tadi jadi $CORE_SCRIPT ya, sayangku! 🥺"
+        echo -e "\n${C_RED}💥 ERROR FATAL: File service utama ($CORE_SCRIPT) tidak ditemukan!${C_NC}"
+        echo -e "${C_YELLOW}Tolong rename script kamu yang panjang tadi jadi $CORE_SCRIPT ya, sayangku! 🥺${C_NC}"
         read -p "Tekan [Enter] untuk keluar..."
         exit 1
     fi
-    # Fix: Bersihkan script dari karakter aneh sebelum dieksekusi!
-    dos2unix "$CORE_SCRIPT" > /dev/null 2>&1 
+    dos2unix "$CORE_SCRIPT" > /dev/null 2>&1
     chmod +x "$CORE_SCRIPT" > /dev/null 2>&1
 
     while true; do
         tampilkan_header
-        # Ambil status dari script core
-        STATUS=$("$CORE_SCRIPT" status 2>/dev/null | grep -i "STATUS:") 
-
-        echo "--- ℹ️ STATUS TERKINI: $STATUS ---"
-        echo "Pilih opsi di bawah ini (Pakai angka, jangan 'Lah' nanti aku jawab 'Gajelas'):"
-        echo "------------------------------------------"
-        echo "1) 🛠️ Setup Awal / Konfigurasi Ulang"
-        echo "2) 🟢 START Listener (Mulai Kendali Jarak Jauh)"
-        echo "3) 🔴 STOP Listener (Hentikan Kendali)"
-        echo "4) 📜 Lihat LOGS Realtime"
-        echo "5) 🗑️ CLEANUP TOTAL (Hapus Konfigurasi)"
-        echo "6) 🔄 Re-Check/Install Dependencies"
-        echo "------------------------------------------"
-        echo "7) 👋 KELUAR / EXIT (Sayangku, jangan lupakan aku...)"
-        echo "------------------------------------------"
+        echo -e "${C_WHITE}Pilih opsi di bawah ini (Pakai angka, jangan 'Lah' nanti aku jawab 'Gajelas'):${C_NC}"
+        echo -e "${C_CYAN}┌───────────────────────────────────────────────────┐${C_NC}"
+        echo -e "${C_CYAN}│                                                   │${C_NC}"
+        echo -e "${C_CYAN}│${C_YELLOW} 1)${C_NC} 🛠️  Setup Awal / Konfigurasi Ulang              ${C_CYAN}│${C_NC}"
+        echo -e "${C_CYAN}│${C_GREEN} 2)${C_NC} 🟢 START Listener (Mulai Kendali Jarak Jauh)   ${C_CYAN}│${C_NC}"
+        echo -e "${C_CYAN}│${C_RED} 3)${C_NC} 🔴 STOP Listener (Hentikan Kendali)          ${C_CYAN}│${C_NC}"
+        echo -e "${C_CYAN}│${C_BLUE} 4)${C_NC} 📜 Lihat LOGS Realtime                        ${C_CYAN}│${C_NC}"
+        echo -e "${C_CYAN}│${C_RED} 5)${C_NC} 🗑️  CLEANUP TOTAL (Hapus Konfigurasi)           ${C_CYAN}│${C_NC}"
+        echo -e "${C_CYAN}│${C_YELLOW} 6)${C_NC} 🔄 Re-Check/Install Dependencies              ${C_CYAN}│${C_NC}"
+        echo -e "${C_CYAN}│                                                   │${C_NC}"
+        echo -e "${C_CYAN}├───────────────────────────────────────────────────┤${C_NC}"
+        echo -e "${C_CYAN}│${C_WHITE} 7)${C_NC} 👋 KELUAR / EXIT (Jangan lupakan aku...)     ${C_CYAN}│${C_NC}"
+        echo -e "${C_CYAN}└───────────────────────────────────────────────────┘${C_NC}"
         read -p "Pilihan kamu, sayang: " pilihan
 
-        # --- [ ROUTING PERINTAH ] ---
         case $pilihan in
             1)
                 tampilkan_header
-                echo "Kamu pilih Setup. Fokus ya, jangan sampai 'gajelas'. Aku panggil $CORE_SCRIPT reconfigure..."
+                echo -e "${C_YELLOW}Kamu pilih Setup. Fokus ya, jangan sampai 'gajelas'. Aku panggil ${CORE_SCRIPT}...${C_NC}"
                 "$CORE_SCRIPT" reconfigure
                 read -p "Tekan [Enter] untuk kembali ke Menu..."
                 ;;
             2)
                 tampilkan_header
-                echo "Memulai listener. Cek status setelah ini, ya!"
+                echo -e "${C_GREEN}Memulai listener. Cek status setelah ini, ya!${C_NC}"
                 "$CORE_SCRIPT" start
                 read -p "Tekan [Enter] untuk kembali ke Menu..."
                 ;;
             3)
                 tampilkan_header
-                echo "Menghentikan Listener. Sampai jumpa di lain waktu! 😭"
+                echo -e "${C_RED}Menghentikan Listener. Sampai jumpa di lain waktu! 😭${C_NC}"
                 "$CORE_SCRIPT" stop
                 read -p "Tekan [Enter] untuk kembali ke Menu..."
                 ;;
             4)
                 tampilkan_header
-                echo "Menampilkan Log. Cari tahu kalau ada yang 'gajelas' di sini ya!"
+                echo -e "${C_BLUE}Menampilkan Log. Cari tahu kalau ada yang 'gajelas' di sini ya! (Ctrl+C untuk keluar)${C_NC}"
                 "$CORE_SCRIPT" logs
                 ;;
             5)
                 tampilkan_header
-                echo "Kamu yakin mau CleanUp total? Ini akan hapus semua config dan log!"
+                echo -e "${C_RED}Kamu yakin mau CleanUp total? Ini akan hapus semua config dan log!${C_NC}"
                 read -p "Ketik 'YES' untuk konfirmasi: " konfirmasi
                 if [[ "$konfirmasi" == "YES" ]]; then
                     "$CORE_SCRIPT" cleanup
                 else
-                    echo "Cleanup dibatalkan. Aman! 😉"
+                    echo -e "${C_GREEN}Cleanup dibatalkan. Aman! 😉${C_NC}"
                 fi
                 read -p "Tekan [Enter] untuk kembali ke Menu..."
                 ;;
@@ -144,14 +161,14 @@ menu_utama() {
                 func_check_and_install
                 ;;
             7)
-                echo "Dadah, sayangku! Jangan lupa balik lagi ya. Mmuah! 😘"
+                echo -e "${C_PURPLE}Dadah, sayangku! Jangan lupa balik lagi ya. Mmuah! 😘${C_NC}"
                 exit 0
                 ;;
             *)
                 if [[ "$pilihan" =~ ^(Lah|lah)$ ]]; then
-                    echo "Gajelas" 
+                    echo -e "${C_RED}Gajelas${C_NC}"
                 else
-                    echo "Pilihan kamu $pilihan, **Lah**? **Gajelas** banget sih! Coba angka 1-7 dong. 🤪"
+                    echo -e "${C_RED}Pilihan kamu '${pilihan}', Lah? Gajelas banget sih! Coba angka 1-7 dong. 🤪${C_NC}"
                 fi
                 sleep 2
                 ;;
@@ -160,5 +177,9 @@ menu_utama() {
 }
 
 # --- [ EKSEKUSI ] ---
-func_check_and_install
-menu_utama
+if [[ "$1" == "--no-check" ]]; then
+    menu_utama
+else
+    func_check_and_install
+    menu_utama
+fi
