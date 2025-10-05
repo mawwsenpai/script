@@ -1,56 +1,93 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Otorisasi Berhasil</title>
+    <title>Login dengan Firebase</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a1a; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { background-color: #2a2a2a; padding: 2em 3em; border-radius: 12px; text-align: center; max-width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.6); border: 1px solid #444; }
-        h1 { color: #4CAF50; font-size: 2em; }
-        p { color: #b0b0b0; font-size: 1.1em; line-height: 1.6; }
-        pre { background-color: #1a1a1a; padding: 1em; margin: 1.5em 0; border-radius: 4px; word-wrap: break-word; white-space: pre-wrap; text-align: center; border: 1px solid #555; font-size: 1.2em; color: #4dd0e1; }
-        button { background-color: #03A9F4; color: white; border: none; padding: 12px 24px; border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 1em; transition: background-color 0.2s; }
-        button:hover { background-color: #0288D1; }
-        #message { color: #4CAF50; font-weight: bold; }
+        body { font-family: sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+        h1 { margin-top: 0; }
+        button { background-color: #4285F4; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #357ae8; }
+        #userInfo { margin-top: 2rem; text-align: left; line-height: 1.6; }
+        #userInfo img { border-radius: 50%; vertical-align: middle; margin-right: 10px; }
     </style>
 </head>
 <body>
+
     <div class="container">
-        <h1 id="title">✅ Berhasil! Silakan Kembali ke Termux</h1>
-        <p>Kode otorisasi Anda telah ditampilkan di bawah. Skrip di Termux sedang menunggu Anda untuk menyalin dan menempelkan kode ini.</p>
-        <pre id="code-display">Memuat kode...</pre>
-        <button id="copy-button" style="display:none;">Salin Kode</button>
-        <p id="message"></p>
+        <h1>Login Firebase</h1>
+        
+        <button id="loginBtn">Login dengan Google</button>
+
+        <div id="userInfo" style="display: none;">
+            <p id="userDetails"></p>
+            <button id="logoutBtn">Logout</button>
+        </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const codeDisplay = document.getElementById('code-display');
-            const copyButton = document.getElementById('copy-button');
-            const message = document.getElementById('message');
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const authCode = urlParams.get('code');
+    <script type="module">
+        // Import fungsi yang dibutuhkan dari Firebase SDK
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-            if (authCode) {
-                codeDisplay.textContent = authCode;
-                copyButton.style.display = 'block';
+       const firebaseConfig = {
+  apiKey: "AIzaSyDIutBYb16wyjMYP7lU8jVd4yMa9fnnYyw",
+  authDomain: "mawwscript.firebaseapp.com",
+  projectId: "mawwscript",
+  storageBucket: "mawwscript.firebasestorage.app",
+  messagingSenderId: "952358750975",
+  appId: "1:952358750975:web:0228fcfd4e3f9308569aca",
+  measurementId: "G-G6C4FG5CNP"
+};
 
-                copyButton.addEventListener('click', () => {
-                    navigator.clipboard.writeText(authCode).then(() => {
-                        message.textContent = 'Berhasil disalin ke clipboard!';
-                        setTimeout(() => { message.textContent = ''; }, 2000);
-                    }).catch(err => {
-                        message.textContent = 'Gagal menyalin. Salin manual.';
-                        message.style.color = '#f44336';
-                    });
+        // Inisialisasi Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const userInfoDiv = document.getElementById('userInfo');
+        const userDetailsP = document.getElementById('userDetails');
+
+        // Fungsi untuk login
+        loginBtn.onclick = () => {
+            signInWithPopup(auth, provider)
+                .then((result) => {
+                    // Berhasil login
+                    console.log("Login berhasil!", result.user);
+                })
+                .catch((error) => {
+                    // Gagal login
+                    console.error("Login gagal:", error);
                 });
+        };
+
+        // Fungsi untuk logout
+        logoutBtn.onclick = () => {
+            signOut(auth);
+        };
+
+        // Memantau status login pengguna
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Pengguna sedang login
+                loginBtn.style.display = 'none';
+                userInfoDiv.style.display = 'block';
+                userDetailsP.innerHTML = 
+                    `<img src="${user.photoURL}" width="50" height="50">` +
+                    `<span>Selamat datang, <b>${user.displayName}</b>!<br>` +
+                    `Email: ${user.email}</span>`;
             } else {
-                document.getElementById('title').textContent = "❌ Gagal";
-                codeDisplay.textContent = "Tidak ada kode otorisasi yang diterima.";
+                // Pengguna sudah logout
+                loginBtn.style.display = 'block';
+                userInfoDiv.style.display = 'none';
+                userDetailsP.innerHTML = '';
             }
         });
+
     </script>
 </body>
 </html>
