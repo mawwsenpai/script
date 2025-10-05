@@ -1,8 +1,8 @@
 #!/bin/bash
 # ===================================================================
-#           🔧 MOD-APK.SH v11.1 - The Final & Complete Suite 🔧
+#           🔧 MOD-APK.SH v12.0 - The Final Complete Suite 🔧
 #
-#   Versi final yang lengkap, menggabungkan semua fitur:
+#   Versi final yang lengkap dan utuh, menggabungkan semua fitur:
 #   Pencarian APK cerdas, Asisten AI Lokal (Iklan, Premium, Koin),
 #   menu modding lengkap, dan integrasi Gemini API (opsional).
 # ===================================================================
@@ -48,7 +48,7 @@ log_msg() {
 print_header() {
     clear
     echo -e "\033[0;34m==================================================================\033[0m"
-    echo -e "\033[0;32m       🔧 MOD-APK.SH v11.1 - The Final Suite 🔧\033[0m"
+    echo -e "\033[0;32m       🔧 MOD-APK.SH v12.0 - The Final Complete Suite 🔧\033[0m"
     echo -e "\033[0;34m==================================================================\033[0m"
     echo -e "\033[0;33mWorkspace: $WORKSPACE_DIR\033[0m\n"
 }
@@ -177,14 +177,14 @@ modding_menu() {
         echo "1. 🤖 Asisten AI (Lokal)       - Cari patch otomatis (Iklan, Premium, Koin)"
         echo "2. ✍️  Edit Manual              - Buka file/folder dengan nano/grep"
         echo "3. 📂 Terapkan Patch Otomatis    - Jalankan script dari folder '$PATCHER_DIR'"
-        echo "4. 🧠 Konsultasi AI Gemini (Online) - Minta AI menjelaskan kode Smali"
+        echo "4. 🧠 Konsultasi AI Gemini (Online) - Minta AI menjelaskan atau membuat patch"
         echo "5. ✅ Selesai Modding & Lanjut Rebuild"
         read -p ">> Pilihan Anda [1-5]: " action
         case $action in
             1) ai_assistant_local "$project_dir" ;;
             2) manual_editing_menu "$project_dir" ;;
             3) auto_patcher_menu "$project_dir" ;;
-            4) ai_gemini_explain "$project_dir" ;;
+            4) ai_gemini_main "$project_dir" ;;
             5) break ;;
             *) log_msg WARN "Pilihan tidak valid!" ;;
         esac
@@ -353,48 +353,62 @@ auto_patcher_menu() {
     read -p "Tekan [ENTER] untuk kembali..."
 }
 
-# Integrasi AI Gemini: meminta AI untuk menjelaskan kode Smali.
-ai_gemini_explain() {
+# Integrasi AI Gemini: meminta AI untuk menjelaskan atau membuat patch.
+ai_gemini_main() {
     local project_dir="$1"
-    if [ -z "$GEMINI_API_KEY" ]; then
-        log_msg ERROR "API Key Gemini belum diatur di bagian Konfigurasi script!"; sleep 3; return
-    fi
-    if ! command -v jq &>/dev/null; then
-        log_msg ERROR "Perintah 'jq' tidak ditemukan. Fitur ini memerlukannya. (pkg i jq)"; sleep 3; return
-    fi
+    if [ -z "$GEMINI_API_KEY" ]; then log_msg ERROR "API Key Gemini belum diatur!"; sleep 3; return; fi
+    if ! command -v jq &>/dev/null; then log_msg ERROR "'jq' tidak ditemukan! (pkg i jq)"; sleep 3; return; fi
 
     print_header
-    log_msg AI "Konsultasi dengan AI Gemini untuk Analisis Kode."
+    log_msg AI "Menu Konsultasi Gemini."
+    echo "1. Jelaskan Kode Smali"
+    echo "2. Buatkan Kode Patch Smali"
+    read -p ">> Pilih tugas untuk Gemini [1/2]: " gemini_task
+
     read -p ">> Masukkan path ke file Smali di dalam proyek: " smali_file_path
     local full_path="$project_dir/$smali_file_path"
+    if [ ! -f "$full_path" ]; then log_msg ERROR "File tidak ditemukan: $full_path"; sleep 2; return; fi
 
-    if [ ! -f "$full_path" ]; then
-        log_msg ERROR "File tidak ditemukan: $full_path"; sleep 2; return
-    fi
-
-    read -p ">> Masukkan nama metode yang ingin dianalisis (contoh: isPremium): " method_name
+    read -p ">> Masukkan nama metode yang ingin diolah (contoh: isPremium): " method_name
     
-    local smali_code
-    smali_code=$(awk "/\.method.*$method_name/,/\.end method/" "$full_path")
+    local smali_code=$(awk "/\.method.*$method_name/,/\.end method/" "$full_path")
+    if [ -z "$smali_code" ]; then log_msg ERROR "Metode '$method_name' tidak ditemukan."; sleep 2; return; fi
 
-    if [ -z "$smali_code" ]; then
-        log_msg ERROR "Metode '$method_name' tidak ditemukan di dalam file."; sleep 2; return
+    local prompt=""
+    if [ "$gemini_task" == "1" ]; then
+        prompt="Kamu adalah seorang analis kode Smali. Jelaskan apa fungsi dari metode Smali berikut ini dalam bahasa Indonesia yang mudah dimengerti. Kode: \`\`\`smali\n${smali_code}\n\`\`\`"
+    elif [ "$gemini_task" == "2" ]; then
+        read -p ">> Jelaskan modifikasi yang kamu inginkan (contoh: 'buat agar selalu return true'): " mod_request
+        prompt="Kamu adalah seorang ahli modding Smali. Modifikasi total metode Smali berikut sesuai instruksi: \"${mod_request}\". HANYA KELUARKAN BLOK KODE SMALI LENGKAP YANG SUDAH JADI. Jangan ada penjelasan apa pun. Kode Asli: \`\`\`smali\n${smali_code}\n\`\`\`"
+    else
+        log_msg WARN "Pilihan tidak valid."; return
     fi
+    
+    log_msg AI "Mengirim permintaan ke Gemini..."
+    local json_payload=$(jq -n --arg text "$prompt" '{contents: [{parts: [{text: $text}]}]}')
+    local response=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}" -H "Content-Type: application/json" -d "$json_payload")
+    local result_text=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text | sub("```smali"; "") | sub("```"; "")')
 
-    log_msg AI "Mengirim kode ke Gemini untuk dianalisis..."
-    local prompt="Kamu adalah seorang analis kode Smali profesional. Jelaskan apa fungsi dari metode Smali berikut ini dalam bahasa Indonesia yang mudah dimengerti. Fokus pada logikanya. Kode: \`\`\`smali\n${smali_code}\n\`\`\`"
-    local json_payload
-    json_payload=$(jq -n --arg text "$prompt" '{contents: [{parts: [{text: $text}]}]}')
-    local response
-    response=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}" -H "Content-Type: application/json" -d "$json_payload")
-    local explanation
-    explanation=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text')
-
-    if [[ -z "$explanation" || "$explanation" == "null" ]]; then
+    if [[ -z "$result_text" || "$result_text" == "null" ]]; then
         log_msg ERROR "Gagal mendapatkan respon dari AI. Cek API Key atau koneksi."
     else
-        log_msg AI "Hasil Analisis Gemini:"
-        echo -e "--------------------------------------------------\n$explanation\n--------------------------------------------------"
+        if [ "$gemini_task" == "1" ]; then
+            log_msg AI "Hasil Analisis Gemini:"
+            echo -e "--------------------------------------------------\n$result_text\n--------------------------------------------------"
+        elif [ "$gemini_task" == "2" ]; then
+            log_msg AI "Gemini telah membuatkan kode patch berikut:"
+            echo -e "\033[0;32m$result_text\033[0m"
+            read -p ">> Terapkan patch dari AI ini? (y/n): " confirm
+            if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+                local method_start=$(grep -nF "$method_name" "$full_path" | head -1 | cut -d: -f1)
+                local method_end=$(awk "NR >= $method_start && /\\.end method/ {print NR; exit}" "$full_path")
+                sed -i.bak "${method_start},${method_end}d" "$full_path"
+                echo -e "$result_text" | sed -i.bak2 "${method_start}r /dev/stdin" "$full_path" && rm "${full_path}.bak2"
+                log_msg SUCCESS "Patch dari Gemini berhasil diterapkan!"
+            else
+                log_msg INFO "Patch dari Gemini dibatalkan."
+            fi
+        fi
     fi
     read -p "Tekan [ENTER] untuk kembali..."
 }
