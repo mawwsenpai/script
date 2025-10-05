@@ -1,10 +1,10 @@
 #!/bin/bash
 # ===================================================================
-#           🔧 MOD-APK.SH v11.0 - The Final Suite 🔧
+#           🔧 MOD-APK.SH v11.1 - The Final & Complete Suite 🔧
 #
 #   Versi final yang lengkap, menggabungkan semua fitur:
-#   Pencarian APK cerdas, Asisten AI Lokal, menu modding lengkap,
-#   dan integrasi Gemini API (opsional) untuk analisis kode.
+#   Pencarian APK cerdas, Asisten AI Lokal (Iklan, Premium, Koin),
+#   menu modding lengkap, dan integrasi Gemini API (opsional).
 # ===================================================================
 
 # --- [1] KONFIGURASI ---
@@ -48,7 +48,7 @@ log_msg() {
 print_header() {
     clear
     echo -e "\033[0;34m==================================================================\033[0m"
-    echo -e "\033[0;32m       🔧 MOD-APK.SH v11.0 - The Final Suite 🔧\033[0m"
+    echo -e "\033[0;32m       🔧 MOD-APK.SH v11.1 - The Final Suite 🔧\033[0m"
     echo -e "\033[0;34m==================================================================\033[0m"
     echo -e "\033[0;33mWorkspace: $WORKSPACE_DIR\033[0m\n"
 }
@@ -174,7 +174,7 @@ modding_menu() {
         print_header
         log_msg INFO "Proyek aktif: \033[0;33m$(basename "$project_dir")\033[0m"
         echo -e "\n\033[0;34m--- MENU MODDING ---\033[0m"
-        echo "1. 🤖 Asisten AI (Lokal)       - Cari patch otomatis (Iklan, Premium)"
+        echo "1. 🤖 Asisten AI (Lokal)       - Cari patch otomatis (Iklan, Premium, Koin)"
         echo "2. ✍️  Edit Manual              - Buka file/folder dengan nano/grep"
         echo "3. 📂 Terapkan Patch Otomatis    - Jalankan script dari folder '$PATCHER_DIR'"
         echo "4. 🧠 Konsultasi AI Gemini (Online) - Minta AI menjelaskan kode Smali"
@@ -196,7 +196,7 @@ ai_assistant_local() {
     local project_dir="$1"
     print_header
     log_msg AI "Asisten AI diaktifkan! Saya akan mencari pola kode umum."
-    echo -e "\033[0;36mContoh tujuan: 'hapus iklan', 'buat premium'\033[0m"
+    echo -e "\033[0;36mContoh tujuan: 'hapus iklan', 'buat premium', 'unlimited coin'\033[0m"
     read -p ">> Apa tujuan modding Anda? " objective
 
     case "$objective" in
@@ -204,8 +204,7 @@ ai_assistant_local() {
             log_msg AI "Oke, target: Iklan. Mencari metode umum seperti 'loadAd'..."
             local target_files=$(grep -rlwE "loadAd|showAd|loadInterstitial" "$project_dir/smali*")
             if [ -z "$target_files" ]; then
-                log_msg WARN "AI: Tidak ditemukan metode iklan umum. Coba cari manual."
-                sleep 2; return
+                log_msg WARN "AI: Tidak ditemukan metode iklan umum. Coba cari manual."; sleep 2; return
             fi
             
             echo "$target_files" | while read -r file; do
@@ -219,9 +218,7 @@ ai_assistant_local() {
                     if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
                         sed -i.bak "$((line_num+1)) a\ \n    return-void" "$file"
                         log_msg SUCCESS "AI: Patch berhasil diterapkan! (File asli disimpan sebagai .bak)"
-                    else
-                        log_msg INFO "AI: Patch dibatalkan."
-                    fi
+                    else log_msg INFO "AI: Patch dibatalkan."; fi
                 fi
             done
             ;;
@@ -229,8 +226,7 @@ ai_assistant_local() {
             log_msg AI "Oke, target: Premium. Mencari metode pengecekan seperti 'isPremium()Z'..."
             local target_files=$(grep -rlwE "isPremium\(\)Z|isPro\(\)Z" "$project_dir/smali*")
             if [ -z "$target_files" ]; then
-                log_msg WARN "AI: Tidak ditemukan metode premium umum. Coba cari manual."
-                sleep 2; return
+                log_msg WARN "AI: Tidak ditemukan metode premium umum. Coba cari manual."; sleep 2; return
             fi
 
             echo "$target_files" | while read -r file; do
@@ -248,11 +244,48 @@ ai_assistant_local() {
                         sed -i.bak "${method_start},${method_end}d" "$file"
                         echo -e "$signature\n    .locals 1\n\n    const/4 v0, 0x1\n\n    return v0\n.end method" >> "$file"
                         log_msg SUCCESS "AI: Patch berhasil diterapkan! (File asli disimpan sebagai .bak)"
-                    else
-                        log_msg INFO "AI: Patch dibatalkan."
-                    fi
+                    else log_msg INFO "AI: Patch dibatalkan."; fi
                 fi
             done
+            ;;
+        *'coin'*|*'koin'*|*'uang'*)
+            log_msg AI "Oke, target: Unlimited Coin/Free Shopping. Memulai mode detektif..."
+            read -p ">> Masukkan teks yang muncul saat koin kurang (contoh: Not enough coins!): " clue_string
+            if [ -z "$clue_string" ]; then log_msg ERROR "Teks petunjuk tidak boleh kosong!"; sleep 2; return; fi
+
+            log_msg AI "Langkah 1: Mencari nama resource dari teks petunjuk..."
+            local res_name=$(grep "$clue_string" "$project_dir"/res/values*/strings.xml | head -n 1 | sed -n 's/.*name="\([^"]*\)".*/\1/p')
+            if [ -z "$res_name" ]; then log_msg ERROR "Tidak ditemukan nama resource untuk teks itu."; sleep 2; return; fi
+            log_msg SUCCESS "Nama resource ditemukan: $res_name"
+
+            log_msg AI "Langkah 2: Melacak nama resource ke ID Heksadesimal..."
+            local res_id=$(grep "name=\"$res_name\"" "$project_dir"/res/values/public.xml | sed -n 's/.*id="\([^"]*\)".*/\1/p')
+            if [ -z "$res_id" ]; then log_msg ERROR "Tidak ditemukan ID Heksadesimal untuk resource itu."; sleep 2; return; fi
+            log_msg SUCCESS "ID Heksadesimal ditemukan: $res_id"
+            
+            log_msg AI "Langkah 3: Mengendus file Smali yang menggunakan ID ini..."
+            local target_file=$(grep -rl "$res_id" "$project_dir"/smali*)
+            if [ -z "$target_file" ] || [[ $(echo "$target_file" | wc -l) -ne 1 ]]; then
+                log_msg ERROR "Ditemukan 0 atau lebih dari 1 file Smali. Analisis tidak bisa otomatis."
+                log_msg ERROR "File yang ditemukan: $target_file"; sleep 3; return;
+            fi
+            log_msg SUCCESS "TKP ditemukan di file: $target_file"
+
+            log_msg AI "Langkah 4: Mencari 'penjaga gerbang' (if-...) di sekitar TKP..."
+            local gatekeeper_logic=$(grep -B 20 "$res_id" "$target_file" | grep -m 1 "if-")
+            if [ -z "$gatekeeper_logic" ]; then log_msg ERROR "Tidak ditemukan logika 'if-' di dekat TKP."; sleep 2; return; fi
+            
+            local original_logic=$(echo "$gatekeeper_logic" | sed 's/^[ \t]*//')
+            log_msg SUCCESS "Target 'penjaga gerbang' ditemukan: $original_logic"
+
+            echo -e "\033[0;31m- Kode ini yang mencegahmu belanja saat koin kurang.\033[0m"
+            echo -e "\033[0;32m+ Melumpuhkan kode ini akan membuat belanja selalu berhasil.\033[0m"
+            read -p ">> Terapkan patch untuk melumpuhkannya? (y/n): " confirm
+            if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+                local patched_logic="#$original_logic"
+                sed -i.bak "s/$original_logic/$patched_logic/" "$target_file"
+                log_msg SUCCESS "AI: Patch berhasil diterapkan! Penjaga gerbang telah dilumpuhkan."
+            else log_msg INFO "AI: Patch dibatalkan."; fi
             ;;
         *)
             log_msg WARN "AI: Maaf, saya belum dilatih untuk tujuan '$objective'. Coba gunakan mode manual."
@@ -284,8 +317,7 @@ manual_editing_menu() {
                 if [ -f "$project_dir/$file_to_edit" ]; then
                     nano "$project_dir/$file_to_edit"
                 else
-                    log_msg ERROR "File tidak ditemukan!"
-                    sleep 2
+                    log_msg ERROR "File tidak ditemukan!"; sleep 2
                 fi
                 ;;
             3) break ;;
@@ -300,9 +332,7 @@ auto_patcher_menu() {
     print_header
     log_msg INFO "Menerapkan patch otomatis dari '$PATCHER_DIR'..."
     if [ ! -d "$PATCHER_DIR" ] || [ -z "$(ls -A "$PATCHER_DIR")" ]; then
-        log_msg ERROR "Folder patcher '$PATCHER_DIR' kosong atau tidak ditemukan!"
-        sleep 3
-        return
+        log_msg ERROR "Folder patcher '$PATCHER_DIR' kosong atau tidak ditemukan!"; sleep 3; return
     fi
     
     log_msg INFO "Patcher yang tersedia:"
@@ -327,13 +357,10 @@ auto_patcher_menu() {
 ai_gemini_explain() {
     local project_dir="$1"
     if [ -z "$GEMINI_API_KEY" ]; then
-        log_msg ERROR "API Key Gemini belum diatur di bagian Konfigurasi script!"
-        log_msg ERROR "Fitur ini tidak bisa digunakan."
-        sleep 3; return
+        log_msg ERROR "API Key Gemini belum diatur di bagian Konfigurasi script!"; sleep 3; return
     fi
     if ! command -v jq &>/dev/null; then
-        log_msg ERROR "Perintah 'jq' tidak ditemukan. Fitur ini memerlukannya. (pkg i jq)"
-        sleep 3; return
+        log_msg ERROR "Perintah 'jq' tidak ditemukan. Fitur ini memerlukannya. (pkg i jq)"; sleep 3; return
     fi
 
     print_header
@@ -398,4 +425,3 @@ main() {
 
 # Jalankan fungsi utama script.
 main
-
