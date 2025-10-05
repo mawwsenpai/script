@@ -1,21 +1,37 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-#                 MAWW SCRIPT V4 - PROFESSIONAL CORE ENGINE
+#                 MAWW SCRIPT V5 - PROFESSIONAL CORE ENGINE
 # ==============================================================================
-# Deskripsi:
-#   Skrip ini berisi semua logika inti (setup, start, stop, dll.).
-#   Tidak untuk dijalankan langsung, tetapi dipanggil oleh 'main.sh'.
-#
-# Dibuat oleh: Gemini @ Google
-# Versi: 4.0 (Professional Refactor)
+# Versi ini menyertakan analisis dependensi cerdas dengan versi paket
+# yang spesifik untuk menjamin stabilitas dan kompatibilitas.
 # ==============================================================================
 
 # --- [ KONFIGURASI SCRIPT & GLOBAL ] ---
 set -e
 set -o pipefail
 
-# Konfigurasi nama file dan direktori
+# --- [ DAFTAR DEPENDENSI ] ---
+# Semua paket yang dibutuhkan oleh skrip ini didefinisikan di sini.
+
+# 1. Paket Termux (APT/PKG)
+readonly TERMUX_PACKAGES=(
+    "python"
+    "termux-api"
+    "coreutils"
+    "dos2unix"
+)
+
+# 2. Paket Python (PIP) dengan versi spesifik untuk stabilitas
+# Versi ini dipilih karena teruji kompatibel per Oktober 2025.
+readonly PYTHON_REQUIREMENTS=(
+    "google-api-python-client==2.100.0"
+    "google-auth==2.23.0"
+    "google-auth-httplib2==0.2.0"
+    "google-auth-oauthlib==1.2.0"
+)
+
+# --- [ KONFIGURASI FILE & DIREKTORI ] ---
 readonly CONFIG_FILE="device.conf"
 readonly PYTHON_SCRIPT="gmail_listener.py"
 readonly PID_FILE="listener.pid"
@@ -27,13 +43,9 @@ readonly CREDS_FILE_PATH="$CREDS_DEST_DIR/$CREDS_FILENAME"
 readonly POLL_INTERVAL=300 # Detik
 
 # --- [ KODE WARNA ANSI & FUNGSI LOGGING ] ---
-readonly C_RESET='\033[0m'
-readonly C_RED='\033[0;31m'
-readonly C_GREEN='\033[0;32m'
-readonly C_YELLOW='\033[0;33m'
-readonly C_BLUE='\033[0;34m'
+readonly C_RESET='\033[0m'; readonly C_RED='\033[0;31m'; readonly C_GREEN='\033[0;32m';
+readonly C_YELLOW='\033[0;33m'; readonly C_BLUE='\033[0;34m';
 
-# Fungsi logging untuk output yang konsisten
 function _log()     { local color="$1"; shift; echo -e "${color}[*] $@${C_RESET}"; }
 function _log_info()  { _log "$C_BLUE" "$@"; }
 function _log_ok()    { _log "$C_GREEN" "$@"; }
@@ -43,55 +55,68 @@ function _log_error() { _log "$C_RED" "$@"; }
 
 # --- [ FUNGSI-FUNGSI LOGIKA INTI ] ---
 
-# Memeriksa dan menginstal semua dependensi yang diperlukan
+# Analisis dan instalasi dependensi yang canggih
 function check_dependencies() {
-    _log_info "Memulai pengecekan dependensi sistem..."
-    local pkg_needed=0
+    _log_info "--- Menganalisis & Menginstal Kebutuhan Skrip ---"
     
-    # 1. Dependensi Termux
-    _log_info "1. Memeriksa paket Termux..."
-    for pkg in python termux-api coreutils dos2unix; do
+    # 1. Analisis Paket Termux
+    _log_info "Langkah 1/3: Menganalisis paket sistem (pkg)..."
+    local missing_pkgs=()
+    for pkg in "${TERMUX_PACKAGES[@]}"; do
         if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-            _log_warn "   - Paket '$pkg' tidak ditemukan."
-            pkg_needed=1
+            _log_warn "   - Paket '$pkg' belum terinstal."
+            missing_pkgs+=("$pkg")
         fi
     done
-    if [ $pkg_needed -eq 1 ]; then
-        _log_info "Menginstal paket Termux yang dibutuhkan..."
-        pkg install -y python termux-api coreutils dos2unix || { _log_error "Gagal menginstal paket Termux."; exit 1; }
-    fi
-    _log_ok "   Semua paket Termux sudah terinstal."
 
-    # 2. Dependensi Python (pip)
-    _log_info "2. Memeriksa library Python..."
-    if ! pip show google-api-python-client > /dev/null 2>&1; then
-        _log_warn "   - Library Google API tidak ditemukan."
-        _log_info "Menginstal library Python... (membutuhkan koneksi internet)"
-        pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib || { _log_error "Gagal menginstal library Python."; exit 1; }
+    if [ ${#missing_pkgs[@]} -gt 0 ]; then
+        _log_info "Menginstal paket sistem yang dibutuhkan..."
+        pkg install -y "${missing_pkgs[@]}" || { _log_error "Gagal menginstal paket sistem."; exit 1; }
     fi
-    _log_ok "   Semua library Python sudah terinstal."
+    _log_ok "   Semua paket sistem sudah siap."
+
+    # 2. Analisis Paket Python
+    _log_info "Langkah 2/3: Menganalisis library Python (pip)..."
+    local missing_py_reqs=()
+    for req in "${PYTHON_REQUIREMENTS[@]}"; do
+        local pkg_name="${req%%==*}"
+        local req_version="${req##*==}"
+        
+        local installed_version
+        installed_version=$(pip show "$pkg_name" 2>/dev/null | grep -i 'Version:' | awk '{print $2}')
+
+        if [[ -z "$installed_version" ]]; then
+            _log_warn "   - Library '$pkg_name' belum terinstal."
+            missing_py_reqs+=("$req")
+        elif [[ "$installed_version" != "$req_version" ]]; then
+            _log_warn "   - Library '$pkg_name' versi salah (Terinstal: $installed_version, Dibutuhkan: $req_version)."
+            missing_py_reqs+=("$req")
+        fi
+    done
     
-    # 3. Izin Penyimpanan
-    _log_info "3. Memeriksa izin penyimpanan..."
+    if [ ${#missing_py_reqs[@]} -gt 0 ]; then
+        _log_info "Menginstal/memperbarui library Python ke versi yang tepat..."
+        pip install --no-cache-dir --force-reinstall "${missing_py_reqs[@]}" || { _log_error "Gagal menginstal library Python."; exit 1; }
+    fi
+    _log_ok "   Semua library Python sudah siap."
+
+    # 3. Analisis Izin Penyimpanan
+    _log_info "Langkah 3/3: Menganalisis izin penyimpanan..."
     if [ ! -d "$HOME/storage/shared" ]; then
         _log_warn "   - Izin penyimpanan belum diberikan."
         _log_info "Meminta izin penyimpanan Termux..."
         termux-setup-storage
     fi
     _log_ok "   Izin penyimpanan sudah dikonfigurasi."
-    _log_ok "Pengecekan dependensi selesai."
+    _log_ok "--- Analisis & Instalasi Selesai ---"
 }
 
 # Proses setup dan konfigurasi awal yang cerdas
 function setup() {
     clear
     _log_info "--- Memulai Proses Setup & Konfigurasi ---"
-    
-    # Hentikan proses yang mungkin masih berjalan dan hapus token lama
-    stop >/dev/null 2>&1 || true # Hentikan, abaikan jika gagal
+    stop >/dev/null 2>&1 || true
     rm -f "$TOKEN_FILE"
-
-    # Langkah 1: Kumpulkan informasi dari pengguna
     _log_info "Langkah 1/3: Mengumpulkan Detail Akun..."
     read -p "   - Masukkan Alamat Email Gmail Anda : " email_input
     read -p "   - Masukkan Subjek Perintah Rahasia : " subject_input
@@ -102,32 +127,24 @@ function setup() {
     echo "MY_EMAIL=\"$email_input\"" > "$CONFIG_FILE"
     echo "CMD_SUBJECT=\"$subject_input\"" >> "$CONFIG_FILE"
     _log_ok "   Detail akun berhasil disimpan di '$CONFIG_FILE'."
-
-    # Langkah 2: Otomatis mencari dan menyiapkan file kredensial
     _log_info "Langkah 2/3: Mencari & Menyiapkan File Kredensial..."
     mkdir -p "$CREDS_DEST_DIR"
-    
     if [ ! -f "$CREDS_FILE_PATH" ]; then
         _log_warn "   File '$CREDS_FILENAME' tidak ditemukan di lokasi default."
         _log_info "   Mencari file di seluruh penyimpanan internal... Mohon tunggu..."
-        
         local search_results
         readarray -t search_results < <(find "$HOME/storage/shared" -iname "$CREDS_FILENAME" 2>/dev/null)
-        
         if [ ${#search_results[@]} -eq 0 ]; then
             _log_error "PENCARIAN GAGAL: File '$CREDS_FILENAME' tidak ditemukan."
             _log_error "Pastikan Anda sudah men-download file dari Google Cloud dan menyimpannya di HP Anda."
             exit 1
         fi
-        
         local target_file="${search_results[0]}"
         cp "$target_file" "$CREDS_FILE_PATH"
         _log_ok "   File ditemukan di '$target_file' dan otomatis disalin ke tujuan."
     else
         _log_ok "   File '$CREDS_FILENAME' sudah ada di lokasi yang benar."
     fi
-
-    # Langkah 3: Otorisasi akun melalui Google
     _log_info "Langkah 3/3: Otorisasi Akun Google..."
     _generate_python_script
     _log_info "Ikuti instruksi di bawah untuk memberikan izin:"
@@ -136,13 +153,10 @@ function setup() {
     echo -e "   3. Login dan berikan izin (Allow)."
     echo -e "   4. Google akan memberikan sebuah KODE."
     echo -e "   5. ${C_YELLOW}SALIN${C_RESET} kode tersebut dan ${C_YELLOW}TEMPEL (PASTE)${C_RESET} kembali ke sini."
-    
-    # Jalankan otorisasi
     if python "$PYTHON_SCRIPT"; then
         if [ -f "$TOKEN_FILE" ]; then
             _log_ok "🎉 SETUP SELESAI! Otorisasi berhasil. Anda siap memulai listener."
         else
-            # Kondisi ini seharusnya tidak terjadi jika python exit dengan sukses, tapi sebagai pengaman
             _log_error "SETUP GAGAL. Token otorisasi tidak berhasil dibuat."
             exit 1
         fi
@@ -160,12 +174,10 @@ function start() {
         _log_warn "Silakan jalankan 'Setup' (pilihan 3) terlebih dahulu."
         return 1
     fi
-
     if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then
         _log_warn "Listener sudah dalam keadaan berjalan (PID: $(cat "$PID_FILE"))."
         return 0
     fi
-    
     _generate_python_script
     nohup python "$PYTHON_SCRIPT" >/dev/null 2>&1 &
     echo $! > "$PID_FILE"
@@ -178,10 +190,8 @@ function stop() {
     if [ ! -f "$PID_FILE" ]; then
         _log_warn "Listener memang tidak sedang berjalan."; return 0
     fi
-    
     local pid_to_kill
     pid_to_kill=$(cat "$PID_FILE")
-    # Cek apakah proses benar-benar ada sebelum mencoba kill
     if ps -p "$pid_to_kill" > /dev/null; then
         kill "$pid_to_kill"
         rm -f "$PID_FILE"
@@ -219,14 +229,11 @@ function cleanup() {
 
 # Fungsi internal untuk menghasilkan skrip Python dari template
 function _generate_python_script() {
-    # Pastikan file konfigurasi ada sebelum mencoba membacanya
     if [ ! -f "$CONFIG_FILE" ]; then
         _log_error "File konfigurasi '$CONFIG_FILE' tidak ditemukan. Jalankan setup terlebih dahulu."
         exit 1
     fi
     source "$CONFIG_FILE"
-
-    # Template skrip Python (Heredoc)
     cat << EOF > "$PYTHON_SCRIPT"
 # -*- coding: utf-8 -*-
 # Dibuat otomatis oleh core.sh - JANGAN EDIT MANUAL
@@ -240,8 +247,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
-# --- KONFIGURASI ---
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 MY_EMAIL = "$MY_EMAIL"
 CMD_SUBJECT = "$CMD_SUBJECT"
@@ -249,13 +254,9 @@ TOKEN_FILE = "$TOKEN_FILE"
 CREDS_FILE = "$CREDS_FILE_PATH"
 LOG_FILE = "$LOG_FILE"
 POLL_INTERVAL = $POLL_INTERVAL
-
-# Konfigurasi logging
 logging.basicConfig(level=logging.INFO, filename=LOG_FILE, filemode='a', 
                     format='%(asctime)s - %(levelname)s - %(message)s')
-
 def get_gmail_service():
-    """Mengautentikasi dan mengembalikan objek service Gmail."""
     creds = None
     try:
         if os.path.exists(TOKEN_FILE):
@@ -276,19 +277,15 @@ def get_gmail_service():
         logging.critical(f"Gagal mendapatkan service Gmail: {e}")
         print(f"ERROR: Gagal otorisasi. Detail: {e}", file=sys.stderr)
         sys.exit(1)
-
 def send_reply(service, original_message, body_text, attachment_path=None):
-    """Mengirim email balasan."""
     try:
         headers = original_message['payload']['headers']
         to_email = next(h['value'] for h in headers if h['name'].lower() == 'from')
         subject = "Re: " + next(h['value'] for h in headers if h['name'].lower() == 'subject')
-        
         message = MIMEMultipart()
         message['to'] = to_email
         message['subject'] = subject
         message.attach(MIMEText(body_text, 'plain'))
-
         if attachment_path and os.path.exists(attachment_path):
             with open(attachment_path, 'rb') as f:
                 part = MIMEBase('application', 'octet-stream')
@@ -296,21 +293,16 @@ def send_reply(service, original_message, body_text, attachment_path=None):
             encoders.encode_base64(part)
             part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(attachment_path)}"')
             message.attach(part)
-            
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         service.users().messages().send(userId='me', body={'raw': raw_message}).execute()
         logging.info(f"Berhasil mengirim balasan ke {to_email}")
     except Exception as e:
         logging.error(f"Gagal mengirim balasan: {e}")
-
 def execute_command(service, msg_obj, full_command):
-    """Mengeksekusi perintah yang diterima dari email."""
     try:
         command = full_command.split(':')[1].strip().lower()
         logging.info(f"Mengeksekusi perintah: '{command}'")
         output_file, reply_body = None, f"Perintah '{command}' telah selesai dieksekusi."
-        
-        # Daftar Perintah
         if command == 'ss':
             output_file, reply_body = os.path.expanduser("~/screenshot.png"), "Screenshot terlampir."
             subprocess.run(["termux-screenshot", output_file], timeout=20, check=True)
@@ -330,7 +322,6 @@ def execute_command(service, msg_obj, full_command):
             sys.exit(0)
         else:
             reply_body = f"Perintah '{command}' tidak dikenali."
-        
         send_reply(service, msg_obj, reply_body, output_file)
     except subprocess.TimeoutExpired:
         logging.error(f"Perintah '{command}' timeout.")
@@ -344,64 +335,52 @@ def execute_command(service, msg_obj, full_command):
     finally:
         if output_file and os.path.exists(output_file):
             os.remove(output_file)
-
 def main_loop():
-    """Loop utama untuk memeriksa perintah baru."""
     logging.info("Listener service dimulai.")
     print("Otorisasi berhasil. Listener kini berjalan di background.")
     print(f"Anda bisa memantau aktivitas melalui log di: {LOG_FILE}")
-    
     service = get_gmail_service()
-    
     while True:
         try:
             q = f"from:{MY_EMAIL} is:unread subject:'{CMD_SUBJECT}'"
             results = service.users().messages().list(userId='me', labelIds=['INBOX'], q=q).execute()
             messages = results.get('messages', [])
-            
             for message_info in messages:
                 msg_id = message_info['id']
                 msg_obj = service.users().messages().get(userId='me', id=msg_id).execute()
                 if msg_obj:
                     execute_command(service, msg_obj, msg_obj['snippet'])
                     service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
-            
             time.sleep(POLL_INTERVAL)
         except HttpError as e:
             if e.resp.status == 401:
                 logging.error("Otorisasi Gagal (401). Mencoba refresh token...")
-                service = get_gmail_service() # Coba re-autentikasi
+                service = get_gmail_service()
             else:
                 logging.error(f"HttpError: {e}")
-                time.sleep(POLL_INTERVAL * 2) # Tunggu lebih lama jika ada error lain
+                time.sleep(POLL_INTERVAL * 2)
         except Exception as e:
             logging.error(f"Terjadi error pada loop utama: {e}")
             time.sleep(POLL_INTERVAL * 2)
-
 if __name__ == '__main__':
-    # Cek jika dipanggil untuk otorisasi saja
     if not os.path.exists(TOKEN_FILE):
         print("Memulai otorisasi awal...")
         get_gmail_service()
-    else: # Jika tidak, jalankan loop utama
+    else:
         main_loop()
-
 EOF
 }
-
 
 # --- [ ROUTER PERINTAH ] ---
 # Titik masuk utama skrip. Membaca argumen pertama ($1) dari main.sh
 # dan menjalankan fungsi yang sesuai.
 
-# Pastikan ada argumen yang diberikan
 if [ -z "$1" ]; then
     _log_error "Skrip ini tidak untuk dijalankan langsung."
     _log_warn "Silakan jalankan melalui './main.sh'."
     exit 1
 fi
 
-# Jalankan fungsi berdasarkan argumen
 case "$1" in
     check_dependencies) check_dependencies ;;
     setup) setup ;;
