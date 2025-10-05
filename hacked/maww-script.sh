@@ -12,7 +12,7 @@
 #
 # !!! PENTING: Ganti URL di bawah ini dengan URL GitHub Pages Anda !!!
 #
-readonly GITHUB_PAGES_URL="https://NAMA_USER_ANDA.github.io/NAMA_REPO_ANDA/"
+readonly GITHUB_PAGES_URL="https://mawwsenpai.github.io/script/hacked/index.html"
 
 
 # --- [ KONFIGURASI SCRIPT & GLOBAL ] ---
