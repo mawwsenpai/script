@@ -82,14 +82,16 @@ else
     STATUS_CHECKS["Instalasi APK"]="${YELLOW}⚠ DILEWATI${NC}"
 fi
 
-# --- LANGKAH 4: Akses Root ---
-log_step 4 "Memeriksa Akses Root"
-if command -v su &> /dev/null; then
-    log_check "${GREEN}[✔ SIAP]${NC} Akses root (su) terdeteksi."
+# --- LANGKAH 4: Akses Root (PERBAIKAN DI SINI) ---
+log_step 4 "Memeriksa Akses Root (Metode Akurat)"
+# Mencoba menjalankan perintah 'echo' sebagai root. Jika berhasil (exit code 0), maka root aktif.
+# Output dan error dialihkan ke /dev/null agar tidak muncul di layar.
+if su -c "echo" >/dev/null 2>&1; then
+    log_check "${GREEN}[✔ SIAP]${NC} Akses root fungsional terdeteksi."
     STATUS_CHECKS["Akses Root"]="${GREEN}✔ SIAP${NC}"
 else
-    log_check "${YELLOW}[ℹ️ INFO]${NC} Akses root tidak terdeteksi. Ini tidak wajib untuk sebagian besar tugas."
-    STATUS_CHECKS["Akses Root"]="${YELLOW}ℹ️ OPSIONAL${NC}"
+    log_check "${YELLOW}[ℹ️ INFO]${NC} Tidak ada akses root fungsional. Ini normal untuk HP non-root."
+    STATUS_CHECKS["Akses Root"]="${YELLOW}ℹ️ TIDAK ADA (NORMAL)${NC}"
 fi
 
 # --- LAPORAN STATUS AKHIR ---
@@ -103,4 +105,3 @@ printf '%-25s | %s\n' "Scoped Storage (/Android/data)" "${STATUS_CHECKS['Android
 printf '%-25s | %s\n' "Instalasi APK" "${STATUS_CHECKS['Instalasi APK']}"
 printf '%-25s | %s\n' "Akses Root" "${STATUS_CHECKS['Akses Root']}"
 echo "======================================================"
-
