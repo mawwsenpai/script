@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-#                 MAWW SCRIPT V10 - AUTO EDITION
+#                 MAWW SCRIPT V10.1 - AUTO EDITION (STABLE)
 # ==============================================================================
 # Deskripsi:
-#   Versi cerdas yang menganalisis semua kebutuhan, termasuk izin Tampilan,
-#   dan secara otomatis membuka browser untuk otorisasi yang lebih mulus.
+#   Versi dengan perbaikan sintaksis untuk memastikan kompatibilitas dan
+#   stabilitas di semua lingkungan shell. Semua fungsi ditulis dalam format
+#   multi-baris yang benar.
 # ==============================================================================
 
 # --- [ KONFIGURASI PENGGUNA ] ---
 #
 # !!! PENTING: Ganti URL di bawah ini dengan URL GitHub Pages Anda !!!
 #
-readonly GITHUB_PAGES_URL="https://mawwsenpai.github.io/script/hacked/index.html"
+readonly GITHUB_PAGES_URL="https://mawwsenpao.github.io/script/hacked/index.html"
 
 
 # --- [ KONFIGURASI SCRIPT & GLOBAL ] ---
@@ -26,6 +27,7 @@ readonly PATCH_FLAG_FILE=".patch_installed"
 readonly C_RESET='\033[0m'; readonly C_RED='\033[0;31m'; readonly C_GREEN='\033[0;32m';
 readonly C_YELLOW='\033[0;33m'; readonly C_BLUE='\033[0;34m'; readonly C_PURPLE='\033[0;35m';
 readonly C_WHITE='\033[1;37m';
+
 function _log(){ local color="$1"; shift; echo -e "${color}[*] $@${C_RESET}"; }
 function _log_info(){ _log "$C_BLUE" "$@"; }
 function _log_ok(){ _log "$C_GREEN" "$@"; }
@@ -49,22 +51,37 @@ function _check_overlay_permission() {
 }
 
 function run_patcher() {
-    clear; _log_info "============================================="
-    _log_info "   MEMULAI PROSES PERSIAPAN LINGKUNGAN...    "; _log_info "============================================="
+    clear
+    _log_info "============================================="
+    _log_info "   MEMULAI PROSES PERSIAPAN LINGKUNGAN...    "
+    _log_info "============================================="
+    
     readonly TERMUX_PACKAGES=( "python" "termux-api" "coreutils" "dos2unix" )
     readonly PYTHON_REQUIREMENTS=( "google-api-python-client==2.100.0" "google-auth==2.23.0" "google-auth-httplib2==0.2.0" "google-auth-oauthlib==1.2.0" )
-    _log_info "\nLANGKAH 1/4: Memperbarui & menginstal paket sistem..."; pkg update -y >/dev/null 2>&1
+    
+    _log_info "\nLANGKAH 1/4: Memperbarui & menginstal paket sistem..."
+    pkg update -y >/dev/null 2>&1
     pkg install -y "${TERMUX_PACKAGES[@]}" || { _log_error "Gagal menginstal paket sistem."; exit 1; }
     _log_ok "   -> Paket sistem berhasil dikonfigurasi."
-    _log_info "\nLANGKAH 2/4: Membersihkan & menginstal library Python..."; pip cache purge >/dev/null 2>&1
+
+    _log_info "\nLANGKAH 2/4: Membersihkan & menginstal library Python..."
+    pip cache purge >/dev/null 2>&1
     pip install --no-cache-dir --force-reinstall "${PYTHON_REQUIREMENTS[@]}" || { _log_error "Gagal menginstal library Python."; exit 1; }
     _log_ok "   -> Semua library Python berhasil diinstal dengan versi yang tepat."
-    _log_info "\nLANGKAH 3/4: Mengonfigurasi izin penyimpanan..."; if [ ! -d "$HOME/storage/shared" ]; then termux-setup-storage; fi
+
+    _log_info "\nLANGKAH 3/4: Mengonfigurasi izin penyimpanan..."
+    if [ ! -d "$HOME/storage/shared" ]; then
+        termux-setup-storage
+    fi
     _log_ok "   -> Izin penyimpanan siap."
+
     _check_overlay_permission
-    echo; _log_ok "======================================================="
+    
+    echo
+    _log_ok "======================================================="
     _log_ok "  ✅  PROSES PERSIAPAN LINGKUNGAN SELESAI! ✅"
-    _log_ok "======================================================="; touch "$PATCH_FLAG_FILE"
+    _log_ok "======================================================="
+    touch "$PATCH_FLAG_FILE"
     _log_info "Lingkungan Anda sekarang sudah bersih dan siap."
 }
 
@@ -72,36 +89,102 @@ function run_patcher() {
 #                       BAGIAN 2: LOGIKA INTI (CORE)
 # ==============================================================================
 function setup() {
-    clear; _log_info "--- Memulai Proses Setup (Metode Otomatis) ---"
-    stop >/dev/null 2>&1 || true; rm -f "$TOKEN_FILE" "$CONFIG_FILE"
-    _log_info "Langkah 1/3: Mengumpulkan Detail Akun..."; read -p "   - Masukkan Alamat Email Gmail Anda : " email_input
+    clear
+    _log_info "--- Memulai Proses Setup (Metode Otomatis) ---"
+    stop >/dev/null 2>&1 || true
+    rm -f "$TOKEN_FILE" "$CONFIG_FILE"
+    
+    _log_info "Langkah 1/3: Mengumpulkan Detail Akun..."
+    read -p "   - Masukkan Alamat Email Gmail Anda : " email_input
     read -p "   - Masukkan Subjek Perintah Rahasia : " subject_input
-    echo "MY_EMAIL=\"$email_input\"" > "$CONFIG_FILE"; echo "CMD_SUBJECT=\"$subject_input\"" >> "$CONFIG_FILE"
-    _log_info "Langkah 2/3: Menyiapkan File Kredensial (tipe Web App)..."; mkdir -p "$CREDS_DEST_DIR"
+    echo "MY_EMAIL=\"$email_input\"" > "$CONFIG_FILE"
+    echo "CMD_SUBJECT=\"$subject_input\"" >> "$CONFIG_FILE"
+    
+    _log_info "Langkah 2/3: Menyiapkan File Kredensial (tipe Web App)..."
+    mkdir -p "$CREDS_DEST_DIR"
     if [ ! -f "$CREDS_FILE_PATH" ]; then
-        _log_warn "   File '$CREDS_FILENAME' tidak ditemukan."; _log_info "   Mencari di folder Download..."
+        _log_warn "   File '$CREDS_FILENAME' tidak ditemukan."
+        _log_info "   Mencari di folder Download..."
         local download_path="$HOME/storage/shared/Download/$CREDS_FILENAME"
-        if [ -f "$download_path" ]; then cp "$download_path" "$CREDS_FILE_PATH"; _log_ok "   File ditemukan dan disalin."; else
-            _log_error "GAGAL: Pastikan '$CREDS_FILENAME' (tipe Web App) ada di folder Download."; exit 1; fi
+        if [ -f "$download_path" ]; then
+            cp "$download_path" "$CREDS_FILE_PATH"
+            _log_ok "   File ditemukan dan disalin."
+        else
+            _log_error "GAGAL: Pastikan '$CREDS_FILENAME' (tipe Web App) ada di folder Download."
+            exit 1
+        fi
     fi
-    _log_info "Langkah 3/3: Otorisasi Akun Google..."; _generate_python_script_auto_auth
+
+    _log_info "Langkah 3/3: Otorisasi Akun Google..."
+    _generate_python_script_auto_auth
     
     _log_info "   -> Membuat URL otorisasi..."
-    local auth_url; auth_url=$(python "$PYTHON_SCRIPT" --get-url)
+    local auth_url
+    auth_url=$(python "$PYTHON_SCRIPT" --get-url)
 
     _log_info "   -> Membuka browser secara otomatis..."
     termux-open-url "$auth_url"
     
-    if python "$PYTHON_SCRIPT" --paste-code; then _log_ok "🎉 SETUP SELESAI! Otorisasi berhasil."; else
-        _log_error "SETUP GAGAL. Pastikan Anda mengikuti instruksi dengan benar."; exit 1; fi
+    if python "$PYTHON_SCRIPT" --paste-code; then
+        _log_ok "🎉 SETUP SELESAI! Otorisasi berhasil."
+    else
+        _log_error "SETUP GAGAL. Pastikan Anda mengikuti instruksi dengan benar."
+        exit 1
+    fi
 }
-function start() { _log_info "Mencoba memulai listener..."; if [ ! -f "$CONFIG_FILE" ] || [ ! -f "$TOKEN_FILE" ]; then _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup'."; return 1; fi; if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then _log_warn "Listener sudah berjalan."; return 0; fi; _generate_python_script_auto_auth; nohup python "$PYTHON_SCRIPT" --run-loop >/dev/null 2>&1 &; echo $! > "$PID_FILE"; _log_ok "Listener dimulai (PID: $(cat "$PID_FILE"))."; }
-function stop() { _log_info "Mencoba menghentikan listener..."; if [ ! -f "$PID_FILE" ]; then _log_warn "Listener tidak sedang berjalan."; return 0; fi; kill "$(cat "$PID_FILE")"; rm -f "$PID_FILE"; _log_ok "Listener telah dihentikan."; }
-function logs() { if [ ! -f "$LOG_FILE" ]; then _log_warn "File log belum ada."; return 1; fi; _log_info "Menampilkan log (Ctrl+C untuk keluar)..."; tail -f "$LOG_FILE"; }
-function cleanup() { _log_warn "Anda YAKIN ingin menghapus semua konfigurasi?"; read -p "(y/n): " confirm; if [[ "$confirm" =~ ^[Yy]$ ]]; then stop >/dev/null 2>&1 || true; rm -f "$CONFIG_FILE" "$LOG_FILE" "$PYTHON_SCRIPT" "$TOKEN_FILE" "$PID_FILE"; _log_ok "Pembersihan selesai."; else _log_info "Dibatalkan."; fi; }
+
+function start() {
+    _log_info "Mencoba memulai listener..."
+    if [ ! -f "$CONFIG_FILE" ] || [ ! -f "$TOKEN_FILE" ]; then
+        _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup'."
+        return 1
+    fi
+    if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then
+        _log_warn "Listener sudah berjalan."
+        return 0
+    fi
+    
+    _generate_python_script_auto_auth
+    nohup python "$PYTHON_SCRIPT" --run-loop >/dev/null 2>&1 &
+    echo $! > "$PID_FILE"
+    _log_ok "Listener dimulai (PID: $(cat "$PID_FILE"))."
+}
+
+function stop() {
+    _log_info "Mencoba menghentikan listener..."
+    if [ ! -f "$PID_FILE" ]; then
+        _log_warn "Listener tidak sedang berjalan."
+        return 0
+    fi
+    kill "$(cat "$PID_FILE")"
+    rm -f "$PID_FILE"
+    _log_ok "Listener telah dihentikan."
+}
+
+function logs() {
+    if [ ! -f "$LOG_FILE" ]; then
+        _log_warn "File log belum ada."
+        return 1
+    fi
+    _log_info "Menampilkan log (Ctrl+C untuk keluar)..."
+    tail -f "$LOG_FILE"
+}
+
+function cleanup() {
+    _log_warn "Anda YAKIN ingin menghapus semua konfigurasi?"
+    read -p "(y/n): " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        stop >/dev/null 2>&1 || true
+        rm -f "$CONFIG_FILE" "$LOG_FILE" "$PYTHON_SCRIPT" "$TOKEN_FILE" "$PID_FILE"
+        _log_ok "Pembersihan selesai."
+    else
+        _log_info "Dibatalkan."
+    fi
+}
 
 function _generate_python_script_auto_auth() {
     source "$CONFIG_FILE"
+    # (Isi fungsi ini sama persis seperti V10, tidak perlu diubah)
     cat << EOF > "$PYTHON_SCRIPT"
 # -*- coding: utf-8 -*-
 import os, sys, subprocess, logging, base64, time
@@ -207,7 +290,23 @@ EOF
 # ==============================================================================
 #                         BAGIAN 3: TAMPILAN MENU & MAIN
 # ==============================================================================
-function display_header() { clear; local status_text; local pid_text=""; if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then status_text="${C_GREEN}AKTIF${C_RESET}"; pid_text="(PID: $(cat "$PID_FILE"))"; else status_text="${C_RED}TIDAK AKTIF${C_RESET}"; fi; echo -e "${C_PURPLE}╭───────────────────────────────────────────────────╮${C_RESET}"; echo -e "${C_PURPLE}│${C_WHITE}      MAWW SCRIPT V10 - AUTO EDITION           ${C_PURPLE}│${C_RESET}"; echo -e "${C_PURPLE}├───────────────────────────────────────────────────┤${C_RESET}"; echo -e "${C_PURPLE}│ ${C_CYAN}Status   :${C_RESET} ${status_text} ${pid_text}                   ${C_PURPLE}│${C_RESET}"; echo -e "${C_PURPLE}╰───────────────────────────────────────────────────╯${C_RESET}"; }
+function display_header() {
+    clear
+    local status_text
+    local pid_text=""
+    if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then
+        status_text="${C_GREEN}AKTIF${C_RESET}"
+        pid_text="(PID: $(cat "$PID_FILE"))"
+    else
+        status_text="${C_RED}TIDAK AKTIF${C_RESET}"
+    fi
+    echo -e "${C_PURPLE}╭───────────────────────────────────────────────────╮${C_RESET}"
+    echo -e "${C_PURPLE}│${C_WHITE}      MAWW SCRIPT V10.1 - AUTO EDITION         ${C_PURPLE}│${C_RESET}"
+    echo -e "${C_PURPLE}├───────────────────────────────────────────────────┤${C_RESET}"
+    echo -e "${C_PURPLE}│ ${C_CYAN}Status   :${C_RESET} ${status_text} ${pid_text}                   ${C_PURPLE}│${C_RESET}"
+    echo -e "${C_PURPLE}╰───────────────────────────────────────────────────╯${C_RESET}"
+}
+
 function display_menu_and_prompt() {
     echo -e "\n${C_WHITE}MENU UTAMA:${C_RESET}"
     echo -e "${C_CYAN}┌───────────────────────────────────────────────────┐${C_RESET}"
@@ -222,19 +321,38 @@ function display_menu_and_prompt() {
     echo -e "${C_CYAN}│                                                   │${C_RESET}"
     echo -e "${C_CYAN}│  ${C_PURPLE}👋 7) Keluar${C_RESET}                                   │${C_RESET}"
     echo -e "${C_CYAN}└───────────────────────────────────────────────────┘${C_RESET}"
-    local choice; read -p "   Pilihanmu: " choice
-    case $choice in 1) start;; 2) stop;; 3) setup;; 4) logs;; 5) run_patcher;; 6) cleanup;; 7) echo -e "\n${C_PURPLE}Sampai jumpa!${C_RESET}"; exit 0;; *) echo -e "\n${C_RED}Pilihan tidak valid.${C_RESET}";; esac
+    
+    local choice
+    read -p "   Pilihanmu: " choice
+    case $choice in
+        1) start;;
+        2) stop;;
+        3) setup;;
+        4) logs;;
+        5) run_patcher;;
+        6) cleanup;;
+        7) echo -e "\n${C_PURPLE}Sampai jumpa!${C_RESET}"; exit 0;;
+        *) echo -e "\n${C_RED}Pilihan tidak valid.${C_RESET}";;
+    esac
     echo -e "\n${C_YELLOW}Tekan [Enter] untuk kembali...${C_RESET}"; read -n 1
 }
+
 function main() {
+    # Pertama kali dijalankan, otomatis lakukan persiapan lingkungan
     if [ ! -f "$PATCH_FLAG_FILE" ]; then
-        clear; echo -e "${C_YELLOW}Selamat datang! Ini adalah eksekusi pertama.${C_RESET}"
+        clear
+        echo -e "${C_YELLOW}Selamat datang! Ini adalah eksekusi pertama.${C_RESET}"
         echo "Skrip akan menganalisis dan menyiapkan lingkungan Anda secara otomatis."
         echo -e "${C_YELLOW}Tekan [Enter] untuk memulai...${C_RESET}"; read -n 1
         run_patcher
         echo -e "${C_YELLOW}Tekan [Enter] untuk melanjutkan ke menu utama...${C_RESET}"; read -n 1
     fi
-    while true; do display_header; display_menu_and_prompt; done
+
+    # Loop menu utama
+    while true; do
+        display_header
+        display_menu_and_prompt
+    done
 }
 
 # Panggil fungsi utama untuk memulai segalanya
