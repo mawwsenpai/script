@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#                 MAWW SCRIPT V26 - PROFESSIONAL & STABILIZED
+#                 MAWW SCRIPT V27 - SMART CONFIG & STABLE
 # ==============================================================================
 # Deskripsi:
-#   Versi yang dirombak untuk stabilitas dan diagnosis tingkat lanjut.
-#   Menambahkan fungsi validasi eksternal yang kuat untuk memeriksa URL,
-#   format JSON, dan isi config sebelum dieksekusi, dengan pesan error
-#   yang jauh lebih spesifik untuk memandu pengguna.
+#   Versi final yang paling stabil dan ramah pengguna. Menghilangkan
+#   kebutuhan untuk mengedit URL secara manual dengan setup interaktif
+#   yang menanyakan username & repo GitHub. Dilengkapi validasi 4 lapis
+#   untuk diagnosis error yang akurat.
 #
 # Dibuat oleh: Maww Senpai (dengan bantuan Gemini)
-# Versi: 26.0
+# Versi: 27.0
 # ==============================================================================
 
 # --- [ KONFIGURASI GLOBAL & FILE ] ---
@@ -24,8 +24,7 @@ readonly PID_FILE="listener.pid"
 readonly LOG_FILE="listener.log"
 readonly PATCH_FLAG=".patch_installed"
 readonly DOWNLOAD_DIR="$HOME/storage/shared/Download"
-readonly REDIRECT_URI="https://mawwscript.github.io/script/device/index.html"
-readonly CONFIG_URL="https://mawwscript.github.io/script/device/config.json"
+readonly REDIRECT_URI="https://mawwscript.github.io/script/device/index.html" # Ini adalah URI statis pengganti G-Script, JANGAN DIUBAH
 
 # --- [ PALET WARNA & TAMPILAN ] ---
 readonly C_RESET='\033[0m'; readonly C_RED='\033[0;31m'; readonly C_GREEN='\033[0;32m';
@@ -33,21 +32,22 @@ readonly C_YELLOW='\033[0;33m'; readonly C_BLUE='\033[0;34m'; readonly C_PURPLE=
 readonly C_CYAN='\033[0;36m'; readonly C_WHITE='\033[1;37m'; readonly C_BOLD='\033[1m';
 readonly C_DIM='\033[2m';
 
-# --- [ FUNGSI LOGGING & UI HELPER (STABIL) ] ---
+# --- [ FUNGSI LOGGING & UI HELPER ] ---
 function _log_header() { echo -e "\n${C_CYAN}--- [ $@ ] ---${C_RESET}"; }
 function _log_info() { echo -e "${C_WHITE}[i] $@${C_RESET}"; }
 function _log_ok() { echo -e "${C_GREEN}[✔] $@${C_RESET}"; }
 function _log_warn() { echo -e "${C_YELLOW}[!] $@${C_RESET}"; }
 function _log_error() { echo -e "${C_RED}[✖] $@${C_RESET}"; }
 
-# --- [ PROFESSIONAL-GRADE: FUNGSI VALIDASI KONFIGURASI ] ---
+# --- [ FUNGSI VALIDASI KONFIGURASI ] ---
 function validate_remote_config() {
-    _log_info "Memvalidasi konfigurasi dari URL..."
+    local config_url="$1"
+    _log_info "Memvalidasi konfigurasi dari URL: ${config_url}"
     
     # Langkah 1: Validasi URL (Cek 404)
-    if ! curl --fail -sL -o "$CONFIG_JSON_FILE" "$CONFIG_URL"; then
+    if ! curl --fail -sL -o "$CONFIG_JSON_FILE" "$config_url"; then
         _log_error "VALIDASI GAGAL: URL tidak ditemukan (Error 404)."
-        _log_warn "Pastikan URL di variabel CONFIG_URL sudah benar dan GitHub Pages sudah aktif."
+        _log_warn "Pastikan Username & Nama Repo benar, dan GitHub Pages sudah aktif."
         return 1
     fi
     _log_ok "URL valid, file konfigurasi berhasil diunduh."
@@ -55,41 +55,34 @@ function validate_remote_config() {
     # Langkah 2: Validasi Format JSON
     if ! python -m json.tool "$CONFIG_JSON_FILE" > /dev/null 2>&1; then
         _log_error "VALIDASI GAGAL: Isi file bukan format JSON yang valid."
-        _log_warn "Periksa file 'config.json' di GitHub. Pastikan tidak ada typo, koma, atau tanda kutip yang salah/kurang."
-        _log_warn "Masalah umum: nilai Client ID kepotong jadi dua baris."
+        _log_warn "Periksa file 'config.json' di GitHub. Pastikan tidak ada typo atau format yang salah (misal: nilai kepotong baris baru)."
         return 1
     fi
     _log_ok "Format JSON valid."
 
-    # Langkah 3: Validasi Keberadaan Kunci "CLIENT_ID"
+    # Langkah 3: Validasi Keberadaan & Isi CLIENT_ID
     if ! grep -q '"CLIENT_ID"' "$CONFIG_JSON_FILE"; then
         _log_error "VALIDASI GAGAL: Kunci 'CLIENT_ID' tidak ditemukan di dalam config.json."
-        _log_warn "Pastikan Anda menggunakan kunci 'CLIENT_ID' (huruf besar) sesuai format."
         return 1
     fi
-    
-    # Langkah 4: Validasi Isi CLIENT_ID
-    local client_id_value=$(grep -o '"CLIENT_ID": *"[^"]*"' "$CONFIG_JSON_FILE" | grep -o '"[^"]*"$' | tr -d '"')
+    local client_id_value
+    client_id_value=$(grep -o '"CLIENT_ID": *"[^"]*"' "$CONFIG_JSON_FILE" | grep -o '"[^"]*"$' | tr -d '"')
     if [[ -z "$client_id_value" || "$client_id_value" != *.apps.googleusercontent.com ]]; then
         _log_error "VALIDASI GAGAL: Nilai untuk 'CLIENT_ID' kosong atau formatnya tidak valid."
-        _log_warn "Pastikan Anda sudah copy-paste seluruh Client ID dengan benar."
         return 1
     fi
     _log_ok "Kunci dan nilai CLIENT_ID valid."
     
-    _log_info "Semua validasi konfigurasi berhasil."
     return 0
 }
 
-# --- GENERATOR SCRIPT PYTHON (Tidak ada perubahan logika) ---
+# --- [ GENERATOR SCRIPT PYTHON ] ---
 function _generate_py_scripts() {
 source "$CONFIG_DEVICE"
-# ... (isi fungsi ini sama persis seperti v25, tidak perlu diubah) ...
-# (Untuk mempersingkat, bagian ini tidak ditampilkan ulang, cukup gunakan yang dari v25)
 cat << EOF > "$PY_HELPER_TOKEN"
 import sys,os;from google_auth_oauthlib.flow import Flow
 if len(sys.argv)<2:print("Penggunaan: python handle_token.py <auth_code>",file=sys.stderr);sys.exit(1)
-auth_code=sys.argv[1];creds_file="$G_CREDS_FILE";token_file="$G_TOKEN_FILE";scopes=['https://www.googleapis.com/auth/gmail.modify']
+auth_code=sys.argv[1];creds_file="$G_CREDS_FILE";token_file="$G_TOKEN_FILE";scopes=['https.www.googleapis.com/auth/gmail.modify']
 redirect_uri="$REDIRECT_URI"
 if not os.path.exists(creds_file):print(f"FATAL: File '{creds_file}' tidak ditemukan!",file=sys.stderr);sys.exit(1)
 try:
@@ -100,7 +93,7 @@ except Exception as e:print(f"ERROR: Gagal menukar kode. Pastikan URI di Google 
 EOF
 cat << EOF > "$PY_LISTENER"
 import os,sys,subprocess,logging,base64,time;from google.oauth2.credentials import Credentials;from googleapiclient.discovery import build;from google.auth.transport.requests import Request;from email.mime.multipart import MIMEMultipart;from email.mime.text import MIMEText;from email.mime.base import MIMEBase;from email import encoders
-SCOPES=['https://www.googleapis.com/auth/gmail.modify'];TOKEN_FILE='$G_TOKEN_FILE';MY_EMAIL='$MY_EMAIL';CMD_SUBJECT='$CMD_SUBJECT';LOG_FILE='$LOG_FILE';POLL_INTERVAL=180
+SCOPES=['https.www.googleapis.com/auth/gmail.modify'];TOKEN_FILE='$G_TOKEN_FILE';MY_EMAIL='$MY_EMAIL';CMD_SUBJECT='$CMD_SUBJECT';LOG_FILE='$LOG_FILE';POLL_INTERVAL=180
 logging.basicConfig(level=logging.INFO,filename=LOG_FILE,filemode='a',format='%(asctime)s - %(message)s')
 def send_reply(service,original_message,body_text,attachment_path=None):
     try:
@@ -141,27 +134,36 @@ if __name__=='__main__':main_loop()
 EOF
 }
 
-# --- LOGIKA INTI (Menggunakan Fungsi Validasi Baru) ---
+# --- [ FUNGSI INTI ] ---
 function setup() {
     clear; display_header
     _log_header "Setup / Konfigurasi Ulang"
     rm -f "$G_TOKEN_FILE" "$CONFIG_JSON_FILE"
-    
-    # [PROFESSIONAL-GRADE] Memanggil fungsi validasi terlebih dahulu
-    if ! validate_remote_config; then
-        _log_error "Setup dibatalkan karena validasi konfigurasi gagal."
-        return
-    fi
 
     if [ ! -f "$CONFIG_DEVICE" ]; then
-        _log_info "Membuat file '$CONFIG_DEVICE' baru..."
+        _log_info "Membuat file konfigurasi baru..."
         read -r -p "$(echo -e "${C_CYAN}> Masukkan Alamat Email Gmail Anda: ${C_RESET}")" email_input
         read -r -p "$(echo -e "${C_CYAN}> Masukkan Subjek Perintah Rahasia: ${C_RESET}")" subject_input
+        _log_info "Sekarang, masukkan info GitHub Pages Anda..."
+        read -r -p "$(echo -e "${C_CYAN}> Masukkan Username GitHub Anda (contoh: mawwsenpai): ${C_RESET}")" github_user
+        read -r -p "$(echo -e "${C_CYAN}> Masukkan Nama Repository Anda (contoh: MawwScript): ${C_RESET}")" github_repo
+        
         echo "MY_EMAIL=\"$email_input\"" > "$CONFIG_DEVICE"
         echo "CMD_SUBJECT=\"$subject_input\"" >> "$CONFIG_DEVICE"
-        _log_ok "Konfigurasi dasar berhasil disimpan."
+        echo "GITHUB_USER=\"$github_user\"" >> "$CONFIG_DEVICE"
+        echo "GITHUB_REPO=\"$github_repo\"" >> "$CONFIG_DEVICE"
+        _log_ok "Konfigurasi berhasil disimpan di '$CONFIG_DEVICE'."
     fi
     source "$CONFIG_DEVICE"
+
+    # Membangun URL secara dinamis
+    local dynamic_config_url="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/script/device/config.json"
+    
+    # Memanggil fungsi validasi
+    if ! validate_remote_config "$dynamic_config_url"; then
+        _log_error "Setup dibatalkan. Hapus file '$CONFIG_DEVICE' untuk coba lagi dengan data lain."
+        return
+    fi
 
     _log_info "Memeriksa file kredensial '$G_CREDS_FILE'..."
     if [ ! -f "$G_CREDS_FILE" ]; then
@@ -172,13 +174,14 @@ function setup() {
         _log_ok "Berhasil disalin dari folder Download."
     fi
     
-    local client_id=$(grep -o '"CLIENT_ID": *"[^"]*"' "$CONFIG_JSON_FILE" | grep -o '"[^"]*"$' | tr -d '"')
-    _log_ok "Client ID berhasil dibaca dari config yang sudah divalidasi."
+    local client_id
+    client_id=$(grep -o '"CLIENT_ID": *"[^"]*"' "$CONFIG_JSON_FILE" | grep -o '"[^"]*"$' | tr -d '"')
+    _log_ok "Client ID berhasil dibaca."
 
     _log_info "Membuat helper script Python..."
     _generate_py_scripts
     
-    local scope="https://www.googleapis.com/auth/gmail.modify"
+    local scope="https.www.googleapis.com/auth/gmail.modify"
     local auth_url="https://accounts.google.com/o/oauth2/v2/auth?scope=${scope}&redirect_uri=${REDIRECT_URI}&response_type=code&client_id=${client_id}&access_type=offline&prompt=select_account"
     
     _log_info "Membuka browser untuk otentikasi..."
@@ -192,10 +195,7 @@ function setup() {
     while true; do
         read -r -p "$(echo -e "${C_CYAN}> Paste kode di sini (atau 'q' untuk keluar): ${C_RESET}")" manual_code
         if [[ "$manual_code" == "q" ]]; then _log_info "Setup dibatalkan."; return; fi
-        if [ -z "$manual_code" ]; then
-            _log_error "Input kosong. Silakan paste kodenya."
-            continue
-        fi
+        if [ -z "$manual_code" ]; then _log_error "Input kosong. Silakan paste kodenya."; continue; fi
         if python "$PY_HELPER_TOKEN" "$manual_code"; then break
         else _log_error "Kode salah atau tidak valid. Coba lagi."; fi
     done
@@ -203,21 +203,19 @@ function setup() {
     if [ -f "$G_TOKEN_FILE" ]; then
         _log_ok "🎉 SETUP SELESAI! Otorisasi berhasil."
     else
-        _log_error "SETUP GAGAL. Coba periksa kembali semua langkah."
+        _log_error "SETUP GAGAL."
     fi
 }
 
-# --- Fungsi Start, Stop, Logs, dll tetap sama seperti v25 ---
-# (Untuk mempersingkat, bagian ini tidak ditampilkan ulang, cukup gunakan yang dari v25)
-function start() { clear;display_header;_log_header "Memulai Listener"; if [ ! -f "$CONFIG_DEVICE" ]||[ ! -f "$G_TOKEN_FILE" ];then _log_error "Konfigurasi/token tidak ditemukan. Jalankan Setup!";return;fi;if [ -f "$PID_FILE" ]&&ps -p "$(cat "$PID_FILE")" >/dev/null;then _log_warn "Listener sudah berjalan.";return;fi;_generate_py_scripts;nohup python "$PY_LISTENER" >/dev/null 2>&1 & echo $! > "$PID_FILE";_log_ok "Listener dimulai (PID: $(cat "$PID_FILE")). Cek log di '$LOG_FILE'." ;}
-function stop() { clear;display_header;_log_header "Menghentikan Listener"; if [ ! -f "$PID_FILE" ];then _log_warn "Listener tidak sedang berjalan.";return;fi;local pid=$(cat "$PID_FILE");if ps -p "$pid" >/dev/null;then kill "$pid";rm -f "$PID_FILE";_log_ok "Listener (PID: $pid) telah dihentikan.";else _log_warn "Proses (PID: $pid) tidak ditemukan. File PID dihapus.";rm -f "$PID_FILE";fi;}
+function start() { clear;display_header;_log_header "Memulai Listener"; if [ ! -f "$CONFIG_DEVICE" ]||[ ! -f "$G_TOKEN_FILE" ];then _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup' (3) dulu.";return;fi;if [ -f "$PID_FILE" ]&&ps -p "$(cat "$PID_FILE")" >/dev/null;then _log_warn "Listener sudah berjalan.";return;fi;_generate_py_scripts;nohup python "$PY_LISTENER" >/dev/null 2>&1 & echo $! > "$PID_FILE";_log_ok "Listener dimulai (PID: $(cat "$PID_FILE")). Cek log di '$LOG_FILE'." ;}
+function stop() { clear;display_header;_log_header "Menghentikan Listener"; if [ ! -f "$PID_FILE" ];then _log_warn "Listener tidak sedang berjalan.";return;fi;local pid; pid=$(cat "$PID_FILE");if ps -p "$pid" >/dev/null;then kill "$pid";rm -f "$PID_FILE";_log_ok "Listener (PID: $pid) telah dihentikan.";else _log_warn "Proses (PID: $pid) tidak ditemukan. File PID dihapus.";rm -f "$PID_FILE";fi;}
 function logs() { clear;display_header;_log_header "Melihat Log Realtime";if [ ! -f "$LOG_FILE" ];then _log_warn "File log belum ada.";return;fi;_log_info "Menampilkan log... Tekan ${C_BOLD}Ctrl+C${C_RESET} untuk keluar."; echo; tail -f "$LOG_FILE" ;}
 function cleanup() { clear;display_header;_log_header "Pembersihan Total";_log_warn "Ini akan menghapus SEMUA file konfigurasi & token.";
     read -r -p "$(echo -e "${C_YELLOW}> Anda yakin ingin melanjutkan? (y/n): ${C_RESET}")" confirm
     if [[ "$confirm" =~ ^[Yy]$ ]];then stop >/dev/null 2>&1||true;_log_info "Menghapus file...";rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$PY_HELPER_TOKEN" "$PY_LISTENER" ".patch_installed" "$LOG_FILE" "$PID_FILE" "$CONFIG_JSON_FILE";_log_ok "Pembersihan selesai.";else _log_info "Pembersihan dibatalkan.";fi;}
 function run_patcher() { set -e;clear;display_header;_log_header "Persiapan Lingkungan Otomatis";
     readonly PKS=("python" "termux-api" "coreutils" "curl");
-    readonly PYR=("google-api-python-client" "google-auth-httplib2" "google-auth-oauthlib");_log_info "${C_BOLD}Langkah 1/3:${C_RESET} Memeriksa paket sistem...";pkg update -y >/dev/null 2>&1;for p in "${PKS[@]}";do if ! dpkg -s "$p">/dev/null 2>&1;then _log_warn "Menginstal '$p'... (mungkin butuh waktu)";pkg install -y "$p";fi;done;_log_ok "Paket sistem siap.";_log_info "${C_BOLD}Langkah 2/3:${C_RESET} Memeriksa library Python...";for r in "${PYR[@]}";do if ! pip show "$r">/dev/null 2>&1;then _log_warn "Menginstal '$r'...";pip install --no-cache-dir "$r";fi;done;_log_ok "Library Python siap.";_log_info "${C_BOLD}Langkah 3/3:${C_RESET} Izin penyimpanan...";if [ ! -d "$HOME/storage/shared" ];then termux-setup-storage;_log_warn "Izin diminta, mohon konfirmasi...";sleep 5;fi;_log_ok "Izin penyimpanan siap.";echo;_log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅";set +e;}
+    readonly PYR=("google-api-python-client" "google-auth-httplib2" "google-auth-oauthlib");_log_info "${C_BOLD}Langkah 1/3:${C_RESET} Memeriksa paket sistem...";pkg update -y >/dev/null 2>&1;for p in "${PKS[@]}";do if ! dpkg -s "$p">/dev/null 2>&1;then _log_warn "Menginstal '$p'...";pkg install -y "$p";fi;done;_log_ok "Paket sistem siap.";_log_info "${C_BOLD}Langkah 2/3:${C_RESET} Memeriksa library Python...";for r in "${PYR[@]}";do if ! pip show "$r">/dev/null 2>&1;then _log_warn "Menginstal '$r'...";pip install --no-cache-dir "$r";fi;done;_log_ok "Library Python siap.";_log_info "${C_BOLD}Langkah 3/3:${C_RESET} Izin penyimpanan...";if [ ! -d "$HOME/storage/shared" ];then termux-setup-storage;_log_warn "Izin diminta...";sleep 5;fi;_log_ok "Izin penyimpanan siap.";echo;_log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅";set +e;}
 function display_header() {
     local status_text; local status_color; local pid_text=""
     if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" >/dev/null; then
@@ -227,7 +225,7 @@ function display_header() {
         status_text="TIDAK AKTIF"; status_color="$C_RED"
     fi
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
-    echo -e "${C_BOLD}${C_WHITE}   Ⓜ Ⓐ Ⓦ Ⓦ    Ⓢ Ⓒ Ⓡ Ⓘ Ⓟ Ⓣ   v26 (Professional)${C_RESET}"
+    echo -e "${C_BOLD}${C_WHITE}   Ⓜ Ⓐ Ⓦ Ⓦ    Ⓢ Ⓒ Ⓡ Ⓘ Ⓟ Ⓣ   v27 (Smart Config)${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
     printf "%-10s %-20s %s\n" " Status" ": ${status_color}${status_text}${C_RESET}" "${C_YELLOW}${pid_text}${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
@@ -261,7 +259,7 @@ function main() {
         _log_header "Selamat Datang di Maww Script!"
         _log_info "Ini eksekusi pertama, skrip akan menyiapkan lingkungan."
         _log_warn "Pastikan 'credentials.json' ada di folder Download."
-        _log_warn "Pastikan juga 'config.json' sudah diupload ke GitHub Pages."
+        _log_warn "Pastikan repo GitHub & 'config.json' sudah siap."
         read -p "   Tekan [Enter] untuk memulai persiapan..."
         run_patcher
         _log_info "Membuat file penanda penyelesaian..."
@@ -275,5 +273,6 @@ function main() {
         display_menu
     done
 }
+
 # --- [ MULAI EKSEKUSI ] ---
 main
