@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#                 MAWW SCRIPT V16 - GRAND FINAL
+#                 MAWW SCRIPT V17 - GHOST BUSTER EDITION
 # ==============================================================================
 # Deskripsi:
-#   Versi definitif yang paling stabil dan lengkap. Menggabungkan semua
-#   perbaikan, peningkatan UX, dan penanganan error yang lebih kuat untuk
-#   memastikan pengalaman yang mulus.
+#   Versi paling stabil. Menambahkan perbaikan untuk error "Address already
+#   in use" (Errno 98) dengan membersihkan port sebelum server dimulai.
 #
 # Dibuat oleh: Maww Senpai (dengan bantuan Gemini)
-# Versi: 16.0
+# Versi: 17.0
 # ==============================================================================
 
 # --- [ KONFIGURASI GLOBAL & FILE ] ---
-set -o pipefail # 'set -e' akan digunakan secara lokal di fungsi yg butuh
+set -o pipefail
 readonly G_CREDS_FILE="credentials.json"
 readonly G_TOKEN_FILE="token.json"
 readonly CONFIG_FILE="config.json"
@@ -26,12 +25,7 @@ readonly PATCH_FLAG=".patch_installed"
 readonly DOWNLOAD_DIR="$HOME/storage/shared/Download"
 
 # --- [ PALET WARNA & TAMPILAN ] ---
-readonly C_RESET='\033[0m'
-readonly C_RED='\033[0;31m'; readonly C_GREEN='\033[0;32m'
-readonly C_YELLOW='\033[0;33m'; readonly C_BLUE='\033[0;34m'
-readonly C_PURPLE='\033[0;35m'; readonly C_CYAN='\033[0;36m'
-readonly C_WHITE='\033[1;37m'; readonly C_BLACK='\033[0;30m'
-readonly C_BG_PURPLE='\033[45m'; readonly C_BG_CYAN='\033[46m'
+readonly C_RESET='\033[0m'; readonly C_RED='\033[0;31m'; readonly C_GREEN='\033[0;32m'; readonly C_YELLOW='\033[0;33m'; readonly C_BLUE='\033[0;34m'; readonly C_PURPLE='\033[0;35m'; readonly C_CYAN='\033[0;36m'; readonly C_WHITE='\033[1;37m'; readonly C_BLACK='\033[0;30m'; readonly C_BG_PURPLE='\033[45m'; readonly C_BG_CYAN='\033[46m'
 
 function _log() { local color="$1"; shift; echo -e "${color}│ $@${C_RESET}"; }
 function _log_info() { _log "$C_CYAN" "$@"; }
@@ -61,6 +55,8 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.server.server_close()
         else:
             self.send_response(400); self.end_headers(); self.wfile.write(b"Parameter 'code' tidak ditemukan.")
+# [PERBAIKAN ANTI-CRASH] Izinkan penggunaan ulang alamat untuk mencegah error pada beberapa kasus.
+socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(("", PORT), MyRequestHandler) as server:
     server.serve_forever()
 EOF
@@ -70,12 +66,9 @@ function _generate_handle_token_py() {
 cat << EOF > "$PY_HELPER_TOKEN"
 import sys, os
 from google_auth_oauthlib.flow import InstalledAppFlow
-auth_code = sys.argv[1]
-creds_file = "$G_CREDS_FILE"
-token_file = "$G_TOKEN_FILE"
-scopes = ['https://www.googleapis.com/auth/gmail.modify']
-if not os.path.exists(creds_file):
-    print(f"FATAL: File '{creds_file}' tidak ditemukan!", file=sys.stderr); sys.exit(1)
+if len(sys.argv) < 2: print("Penggunaan: python handle_token.py <auth_code>", file=sys.stderr); sys.exit(1)
+auth_code = sys.argv[1]; creds_file = "$G_CREDS_FILE"; token_file = "$G_TOKEN_FILE"; scopes = ['https://www.googleapis.com/auth/gmail.modify']
+if not os.path.exists(creds_file): print(f"FATAL: File '{creds_file}' tidak ditemukan!", file=sys.stderr); sys.exit(1)
 try:
     flow = InstalledAppFlow.from_client_secrets_file(creds_file, scopes)
     flow.fetch_token(code=auth_code)
@@ -99,11 +92,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-SCOPES = ['$G_TOKEN_FILE"
-MY_EMAIL = '$MY_EMAIL'
-CMD_SUBJECT = '$CMD_SUBJECT'
-LOG_FILE = '$LOG_FILE'
-POLL_INTERVAL = 180
+SCOPES = ['https://www.googleapis.com/auth/gmail.modify']; TOKEN_FILE = '$G_TOKEN_FILE'; MY_EMAIL = '$MY_EMAIL'; CMD_SUBJECT = '$CMD_SUBJECT'; LOG_FILE = '$LOG_FILE'; POLL_INTERVAL = 180
 logging.basicConfig(level=logging.INFO, filename=LOG_FILE, filemode='a', format='%(asctime)s - %(message)s')
 def send_reply(service, original_message, body_text, attachment_path=None):
     try:
@@ -129,8 +118,7 @@ def execute_command(service, msg_obj, full_command):
     finally:
         if output_file and os.path.exists(output_file): os.remove(output_file)
 def main_loop():
-    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    service = build('gmail', 'v1', credentials=creds)
+    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES); service = build('gmail', 'v1', credentials=creds)
     logging.info("Listener service dimulai."); print("Listener kini berjalan di background...")
     while True:
         try:
@@ -138,7 +126,7 @@ def main_loop():
                 if creds.expired and creds.refresh_token: creds.refresh(Request())
                 else: logging.error("Token tidak valid. Jalankan ulang setup."); sys.exit(1)
             q=f"from:{MY_EMAIL} is:unread subject:'{CMD_SUBJECT}'"; results=service.users().messages().list(userId='me',labelIds=['INBOX'],q=q).execute()
-            messages=results.get('messages',[])
+            messages=results.get('messages',[]);
             for message_info in messages:
                 msg_id=message_info['id']; msg_obj=service.users().messages().get(userId='me',id=msg_id).execute()
                 if msg_obj: execute_command(service,msg_obj,msg_obj['snippet'])
@@ -188,12 +176,17 @@ function setup() {
         _log_error "GAGAL: CLIENT_ID kosong atau tidak ditemukan di $CONFIG_FILE."; return 1
     fi
     _log_ok "   -> Client ID berhasil dibaca dari $CONFIG_FILE."
+    
+    # [PERBAIKAN ANTI-CRASH] Usir paksa proses lama yang mungkin memakai port 8080
+    _log_info "Membersihkan port 8080 (jika ada sisa proses)..."
+    fuser -k 8080/tcp || true
+    
     _log_info "Mencoba mode otentikasi otomatis..."; python "$PY_LOCAL_SERVER" &
     local server_pid=$!
     local scope="https://www.googleapis.com/auth/gmail.modify"; local redirect_uri="http://localhost:8080"
     local auth_url="https://accounts.google.com/o/oauth2/v2/auth?scope=${scope}&redirect_uri=${redirect_uri}&response_type=code&client_id=${client_id}&access_type=offline&prompt=consent"
     termux-open-url "$auth_url"; _log_warn "Menunggu kode dari browser (maksimal 60 detik)..."
-    timeout 60s wait $server_pid 2>/dev/null
+    timeout 60s wait $server_pid 2>/dev/null || true
     if [ -f "auth_code.tmp" ]; then
         _log_ok "Kode otorisasi diterima secara otomatis!"; local auth_code=$(cat "auth_code.tmp"); rm "auth_code.tmp"
         python "$PY_HELPER_TOKEN" "$auth_code"
@@ -221,12 +214,8 @@ function setup() {
 function start() {
     clear; display_header
     _log_info "Mencoba memulai listener..."
-    if [ ! -f "$CONFIG_DEVICE" ] || [ ! -f "$G_TOKEN_FILE" ]; then
-        _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup' (3) dulu."; return 1
-    fi
-    if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then
-        _log_warn "Listener sudah berjalan."; return 0
-    fi
+    if [ ! -f "$CONFIG_DEVICE" ] || [ ! -f "$G_TOKEN_FILE" ]; then _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup' (3) dulu."; return 1; fi
+    if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then _log_warn "Listener sudah berjalan."; return 0; fi
     _generate_gmail_listener_py; nohup python "$PY_LISTENER" >/dev/null 2>&1 &
     echo $! > "$PID_FILE"; _log_ok "Listener dimulai (PID: $(cat "$PID_FILE")). Log di '$LOG_FILE'."
 }
@@ -253,9 +242,7 @@ function cleanup() {
     read -p "   Anda yakin ingin melanjutkan? (y/n): " confirm
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         stop >/dev/null 2>&1 || true; _log_info "Menghapus file..."
-        rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$CONFIG_FILE" \
-              "$PY_HELPER_TOKEN" "$PY_LISTENER" "$PY_LOCAL_SERVER" \
-              "$PID_FILE" "$LOG_FILE" "auth_code.tmp" ".patch_installed"
+        rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$CONFIG_FILE" "$PY_HELPER_TOKEN" "$PY_LISTENER" "$PY_LOCAL_SERVER" "$PID_FILE" "$LOG_FILE" "auth_code.tmp" ".patch_installed"
         _log_ok "Pembersihan selesai."
     else _log_info "Pembersihan dibatalkan."; fi
 }
@@ -264,24 +251,19 @@ function run_patcher() {
     set -e
     clear; display_header
     _log_info "Memulai Proses Persiapan Lingkungan..."
-    readonly TERMUX_PACKAGES=("python" "termux-api" "coreutils"); readonly PYTHON_REQUIREMENTS=("google-api-python-client==2.100.0" "google-auth-httplib2==0.2.0" "google-auth-oauthlib==1.2.0")
+    readonly TERMUX_PACKAGES=("python" "termux-api" "coreutils" "procps"); readonly PYTHON_REQUIREMENTS=("google-api-python-client==2.100.0" "google-auth-httplib2==0.2.0" "google-auth-oauthlib==1.2.0")
     _log_info "LANGKAH 1/3: Memeriksa paket sistem Termux..."; pkg update -y >/dev/null 2>&1
     for pkg in "${TERMUX_PACKAGES[@]}"; do
-        if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-            _log_warn "   -> Menginstal '$pkg'..."; pkg install -y "$pkg"
-        fi
+        if ! dpkg -s "$pkg" >/dev/null 2>&1; then _log_warn "   -> Menginstal '$pkg'..."; pkg install -y "$pkg"; fi
     done; _log_ok "   -> Paket sistem sudah siap."
     _log_info "LANGKAH 2/3: Memeriksa library Python..."
     for req in "${PYTHON_REQUIREMENTS[@]}"; do
         local pkg_name=$(echo "$req" | cut -d'=' -f1)
-        if ! pip show "$pkg_name" >/dev/null 2>&1; then
-            _log_warn "   -> Menginstal '$pkg_name'..."; pip install --no-cache-dir "$req"
-        fi
+        if ! pip show "$pkg_name" >/dev/null 2>&1; then _log_warn "   -> Menginstal '$pkg_name'..."; pip install --no-cache-dir "$req"; fi
     done; _log_ok "   -> Library Python sudah siap."
     _log_info "LANGKAH 3/3: Mengonfigurasi izin penyimpanan..."
-    if [ ! -d "$HOME/storage/shared" ]; then
-        termux-setup-storage; _log_warn "   -> Izin penyimpanan diminta. Mohon setujui..."; sleep 5
-    fi; _log_ok "   -> Izin penyimpanan siap."
+    if [ ! -d "$HOME/storage/shared" ]; then termux-setup-storage; _log_warn "   -> Izin penyimpanan diminta. Mohon setujui..."; sleep 5; fi
+    _log_ok "   -> Izin penyimpanan siap."
     echo; _log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅"
     set +e
 }
@@ -291,33 +273,18 @@ function run_patcher() {
 # ==============================================================================
 
 function display_header() {
-    echo -e "${C_PURPLE}"
-    echo '  ╭──────────────────────────────────────────────────╮'
-    echo -e "  │ ${C_BG_PURPLE}${C_WHITE}    ⓂⒶⓌⓌ - ⓈⒸⓇⒾⓅⓉ  v16 (Grand Final)   ${C_RESET}${C_PURPLE} │"
+    echo -e "${C_PURPLE}"; echo '  ╭──────────────────────────────────────────────────╮'
+    echo -e "  │ ${C_BG_PURPLE}${C_WHITE}    ⓂⒶⓌⓌ - ⓈⒸⓇⒾⓅⓉ  v17 (Ghost Buster)    ${C_RESET}${C_PURPLE} │"
     echo '  ├──────────────────────────────────────────────────┤'
     local status_text; local status_color
-    if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then
-        status_text="    A K T I F    "; status_color="$C_GREEN"; pid_text="(PID: $(cat "$PID_FILE"))"
+    if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then status_text="    A K T I F    "; status_color="$C_GREEN"; pid_text="(PID: $(cat "$PID_FILE"))"
     else status_text="  TIDAK AKTIF  "; status_color="$C_RED"; pid_text=""; fi
     echo -e "  │ ${C_WHITE}Status   :${C_RESET} ${status_color}${status_text}${C_RESET} ${C_YELLOW}${pid_text}${C_RESET}                     ${C_PURPLE}│"
     echo '  ╰──────────────────────────────────────────────────╯'; echo -e "${C_RESET}"
 }
 
 function display_menu() {
-    echo -e "${C_CYAN}  ╭─ Pilihan Menu ───────────────────────────────╮${C_RESET}"
-    echo -e "${C_CYAN}  │                                              │${C_RESET}"
-    echo -e "${C_CYAN}  │   ${C_GREEN}1) 🚀  Mulai Listener${C_RESET}                       │${C_RESET}"
-    echo -e "${C_CYAN}  │   ${C_RED}2) 🛑  Hentikan Listener${C_RESET}                    │${C_RESET}"
-    echo -e "${C_CYAN}  │                                              │${C_RESET}"
-    echo -e "${C_CYAN}  │   ${C_YELLOW}3) ⚙️   Setup / Konfigurasi Ulang${C_RESET}          │${C_RESET}"
-    echo -e "${C_CYAN}  │   ${C_PURPLE}4) 📜  Lihat Log Realtime${C_RESET}                 │${C_RESET}"
-    echo -e "${C_CYAN}  │                                              │${C_RESET}"
-    echo -e "${C_CYAN}  │   ${C_BLUE}5) 🔧  Perbaiki Lingkungan${C_RESET}                │${C_RESET}"
-    echo -e "${C_CYAN}  │   ${C_RED}6) 🗑️   Hapus Semua Konfigurasi${C_RESET}            │${C_RESET}"
-    echo -e "${C_CYAN}  │                                              │${C_RESET}"
-    echo -e "${C_CYAN}  │   ${C_WHITE}7) 🚪  Keluar${C_RESET}                                 │${C_RESET}"
-    echo -e "${C_CYAN}  │                                              │${C_RESET}"
-    echo -e "${C_CYAN}  ╰──────────────────────────────────────────────╯${C_RESET}"
+    echo -e "${C_CYAN}  ╭─ Pilihan Menu ───────────────────────────────╮${C_RESET}"; echo -e "${C_CYAN}  │                                              │${C_RESET}"; echo -e "${C_CYAN}  │   ${C_GREEN}1) 🚀  Mulai Listener${C_RESET}                       │${C_RESET}"; echo -e "${C_CYAN}  │   ${C_RED}2) 🛑  Hentikan Listener${C_RESET}                    │${C_RESET}"; echo -e "${C_CYAN}  │                                              │${C_RESET}"; echo -e "${C_CYAN}  │   ${C_YELLOW}3) ⚙️   Setup / Konfigurasi Ulang${C_RESET}          │${C_RESET}"; echo -e "${C_CYAN}  │   ${C_PURPLE}4) 📜  Lihat Log Realtime${C_RESET}                 │${C_RESET}"; echo -e "${C_CYAN}  │                                              │${C_RESET}"; echo -e "${C_CYAN}  │   ${C_BLUE}5) 🔧  Perbaiki Lingkungan${C_RESET}                │${C_RESET}"; echo -e "${C_CYAN}  │   ${C_RED}6) 🗑️   Hapus Semua Konfigurasi${C_RESET}            │${C_RESET}"; echo -e "${C_CYAN}  │                                              │${C_RESET}"; echo -e "${C_CYAN}  │   ${C_WHITE}7) 🚪  Keluar${C_RESET}                                 │${C_RESET}"; echo -e "${C_CYAN}  │                                              │${C_RESET}"; echo -e "${C_CYAN}  ╰──────────────────────────────────────────────╯${C_RESET}"
     echo -en "\n${C_BG_CYAN}${C_BLACK}  Pilih Opsi [1-7] ❯ ${C_RESET} "; read -n 1 choice; echo
     case $choice in
         '1') start;; '2') stop;; '3') setup;; '4') logs;;
@@ -332,24 +299,17 @@ function main() {
     if [ ! -f ".patch_installed" ]; then
         clear; display_header
         _log_warn "Selamat datang di MAWW SCRIPT!"
-        _log_info "Ini adalah eksekusi pertama. Skrip akan menyiapkan"
-        _log_info "lingkungan yang dibutuhkan agar bisa berjalan."
-        _log_warn "Pastikan file 'credentials.json' (tipe Desktop App)"
-        _log_warn "sudah ada di folder Download Anda."
+        _log_info "Ini adalah eksekusi pertama. Skrip akan menyiapkan lingkungan."
+        _log_warn "Pastikan file 'credentials.json' (tipe Desktop App) ada di folder Download."
         read -p "   Tekan [Enter] untuk memulai persiapan..."
         run_patcher
         _log_info "Membuat file penanda penyelesaian..."
         touch .patch_installed
-        if [ $? -eq 0 ]; then
-            _log_ok "   -> Penanda '.patch_installed' berhasil dibuat."
-        else
-            _log_error "   -> KRITIS: Gagal membuat file penanda. Cek izin folder."
-        fi
+        if [ $? -eq 0 ]; then _log_ok "   -> Penanda '.patch_installed' berhasil dibuat."
+        else _log_error "   -> KRITIS: Gagal membuat file penanda. Cek izin folder."; fi
         read -p "   Tekan [Enter] untuk melanjutkan ke menu utama..."
     fi
-    while true; do
-        clear; display_header; display_menu
-    done
+    while true; do clear; display_header; display_menu; done
 }
 
 # --- [ MULAI EKSEKUSI ] ---
