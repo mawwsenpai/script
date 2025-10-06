@@ -1,100 +1,102 @@
-# Moding Script by mawwsenpai_
 
-Kumpulan script `bash` yang dirancang untuk mempermudah alur kerja _reverse engineering_ dan modifikasi aplikasi Android, langsung dari kenyamanan terminal Termux.
+<div align="center">
 
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Platform](https://img.shields.io/badge/Platform-Termux%20%7C%20Linux-brightgreen.svg)
+# 🔥 Maww-Toolkit PRO Series 🔥
+
+**Sebuah Ekosistem Script `bash` Kelas Atas untuk Menaklukkan Dunia Modding Android, Langsung dari Genggaman Termux-mu.**
+
+</div>
+
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/Version-PRO%20Series%202025-blueviolet">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg">
+  <img alt="Platform" src="https://img.shields.io/badge/Platform-Termux%20%7C%20Linux-brightgreen.svg">
+</p>
 
 ---
 
-## 🌟 Tentang Proyek Ini
+## 🌟 Kenapa Harus Pake "PRO Series"?
 
-Proyek ini lahir dari kebutuhan untuk mengotomatiskan tugas-tugas yang berulang dalam proses modding APK. Daripada mengetik perintah yang sama berulang kali, _toolkit_ ini menyediakan serangkaian script yang saling melengkapi untuk mempercepat proses dari awal hingga akhir.
+Capek ngetik perintah yang itu-itu aja? Bosen liat tampilan terminal yang kaku? Selamat! Kamu datang ke tempat yang tepat. **Maww-Toolkit PRO Series** bukan sekadar kumpulan skrip, ini adalah sebuah **Command Center** terintegrasi yang dirancang dengan filosofi: **Kekuatan, Kecepatan, dan Keindahan.**
 
-## ✨ Fitur Unggulan
+Setiap skrip dalam ekosistem ini dibuat untuk bekerja secara harmonis, dengan antarmuka (UI) yang konsisten, alur kerja yang cerdas, dan fungsionalitas yang bakal bikin proses modding-mu terasa seperti main game.
 
-* **Alur Kerja Lengkap**: Dari dekompilasi, modifikasi, rebuild, hingga signing.
-* **Asisten AI Lokal**: Fitur cerdas berbasis pola untuk membantu menemukan dan mem-patch logika umum seperti iklan atau status premium.
-* **Integrasi Gemini (Opsional)**: Kemampuan untuk "berkonsultasi" dengan Google Gemini API untuk mendapatkan penjelasan mendalam tentang kode Smali yang rumit.
-* **Modular & Terorganisir**: Setiap script memiliki fungsi spesifik, membuatnya mudah untuk dipahami dan dimodifikasi.
-* **Pencarian Cerdas**: Script utama dapat secara otomatis menemukan file APK di direktori umum.
 
-## ⚙️ Prasyarat
 
-Sebelum menggunakan _toolkit_ ini, pastikan Termux Anda sudah dilengkapi dengan:
-* `java` (OpenJDK 17 direkomendasikan)
-* `git`
-* `xmllint` (`pkg install libxml2-utils`)
-* `jq` (Dibutuhkan untuk fitur AI Gemini)
-* **Akses Root** (Dibutuhkan untuk `cheat.sh`)
+## ✨ Komponen Utama Ekosistem
 
-## 🚀 Instalasi & Setup
+Setiap skrip adalah spesialis di bidangnya, tapi mereka semua adalah satu keluarga.
 
-1.  **Clone repository ini:**
-    ```bash
-    git clone [https://github.com/Mawwsenpai/script.git](https://github.com/Mawwsenpai/script.git)
-    ```
-2.  **Masuk ke direktori:**
-    ```bash
+### 1. **`Maww-Toolkit-PRO.sh` - Sang Jantung Operasi**
+Ini adalah bosnya. Skrip ini berfungsi sebagai **Installer, Updater, dan Manager** untuk semua dependensi dan alat tempur yang kamu butuhkan (Java, Apktool, Signer, dll). Lupakan instalasi manual yang ribet. Cukup jalankan dia, dan biarkan keajaiban terjadi.
+
+### 2. **`MOD-APK-PRO.sh` - Sang Ahli Bedah**
+Tempat semua aksi terjadi. Ini adalah **Workspace Modding**-mu. Bongkar APK, lalu masuk ke "Ruang Operasi" untuk melakukan modifikasi dengan alat bantu canggih seperti pencarian string, editor cepat, dan navigasi aset.
+
+### 3. **`BUILD-APK-PRO.sh` - Sang Arsitek Cerdas**
+Punya source code mentah? Serahkan pada Arsitek. Skrip ini akan **menganalisis** source code-mu, memberimu laporan kompatibilitas sistem yang detail, lalu membangunnya menjadi APK jadi dengan penamaan file yang profesional.
+
+### 4. **`SIGN-APK-PRO.sh` - Sang Seniman Finishing**
+Sentuhan akhir yang sempurna. Setelah APK-mu jadi, Seniman ini akan **menandatangani (sign)** dan **mengoptimalkannya (zipalign)**. Mode interaktifnya bakal nyariin APK-mu secara otomatis, jadi kamu tinggal pilih dan klik.
+
+### 5. **`ORGANIZER-PRO.sh` - Sang Manajer Kebersihan**
+Workspace berantakan? Panggil Manajer ini. Dia akan **memindai** seluruh direktori kerjamu, memberimu **laporan status** (jumlah proyek, ukuran file, dll), dan menawarkan opsi untuk membersihkan file-file sampah seperti log lama.
+
+### 6. **`PERMISSION-PRO.sh` - Sang Grandmaster Perizinan**
+Pintu gerbang menuju kekuatan penuh. Sebelum mulai, pastikan Grandmaster ini sudah memberimu restu. Dia akan memandumu mengaktifkan **semua izin penting** di Termux, termasuk "Akses Semua File" yang legendaris untuk menembus batasan Android modern.
+
+---
+
+## 🚀 Instalasi Super Simpel
+
+Lupakan cara-cara lama yang bikin pusing.
+
+1.  **Clone gudang ilmunya:**
+    ` ` `bash
+    git clone https://github.com/Mawwsenpai/script.git
+    ` ` `
+
+2.  **Masuk ke markas:**
+    ` ` `bash
     cd script
-    ```
-3.  **Beri izin eksekusi ke semua script:**
-    ```bash
+    ` ` `
+
+3.  **Beri izin eksekusi (cukup sekali):**
+    ` ` `bash
     chmod +x *.sh
-    ```
-4.  **Jalankan script setup (jika perlu):**
-    ```bash
-    bash install-java.sh
-    bash install-apktool.sh
-    ```
+    ` ` `
+
+4.  **Jalankan Sang Jantung Operasi:**
+    ` ` `bash
+    ./Maww-Toolkit-PRO.sh
+    ` ` `
+    Skrip ini akan mengurus sisanya, menginstal semua yang kamu butuhkan.
+
+##  workflow Alur Kerja yang Direkomendasikan
+
+Untuk hasil maksimal, ikuti langkah-langkah dewa ini:
+
+1.  **`PERMISSION-PRO.sh`**: Pastikan Termux-mu punya kekuatan penuh.
+2.  **`Maww-Toolkit-PRO.sh`**: Instal atau update semua alat tempur.
+3.  **`MOD-APK-PRO.sh`** atau **`BUILD-APK-PRO.sh`**: Lakukan aksi utamamu di sini.
+4.  **`SIGN-APK-PRO.sh`**: Beri sentuhan akhir pada mahakaryamu.
+5.  **`ORGANIZER-PRO.sh`**: Rapikan mejamu setelah bekerja.
 
 ---
 
-## 📜 Deskripsi Script
+## ⚙️ Prasyarat Minimal
 
-Berikut adalah penjelasan untuk setiap script di dalam _toolkit_ ini:
+Pada dasarnya, kamu cuma butuh Termux yang fresh dan beberapa paket dasar.
 
-### 🚀 main.sh
-- **Fungsi**: Script utama atau "launcher" untuk mengakses semua fitur. Ini adalah titik awal dari semua operasi.
-- **Cara Pakai**: Jalankan `bash main.sh` untuk memulai.
+- `git` (`pkg install git`)
+- `wget` (`pkg install wget`)
+- Sisanya? Biarkan `Maww-Toolkit-PRO.sh` yang mengurusnya!
 
-### 🔧 mod-apk.sh
-- **Fungsi**: Inti dari _toolkit_ ini. Menyediakan alur kerja lengkap untuk membongkar, memodifikasi, dan merakit kembali APK. Dilengkapi dengan berbagai menu bantuan, termasuk Asisten AI.
-- **Cara Pakai**: Bisa dijalankan langsung dengan `bash mod-apk.sh` atau melalui `main.sh`.
+## ⚠️ Peringatan Keras dari Mbah Dukun
 
-### ✍️ sign-apk.sh
-- **Fungsi**: Script khusus untuk menandatangani (signing) file APK yang sudah berhasil di-rebuild. Tanpa ini, APK modifikasi tidak akan bisa di-install.
-- **Cara Pakai**: Biasanya dipanggil secara otomatis oleh `mod-apk.sh`, tapi bisa juga digunakan manual: `bash sign-apk.sh namafile.apk`.
+* **RISIKO TANGGUNG SENDIRI:** Ini adalah alat sakti. Kalau HP-mu meledak atau datamu hilang, jangan salahin saya. Oke, sayangku?
+* **BUAT BELAJAR, BUKAN BUAT JAHIL:** Gunakan kekuatan ini untuk memperdalam ilmu, bukan untuk merugikan orang lain.
+* **PATUHI ATURAN MAIN:** Jangan pakai alat ini untuk ngebajak atau aktivitas ilegal lainnya yang melanggar hukum. Jadilah modder yang beretika.
 
-### 🔨 build-apk.sh
-- **Fungsi**: Jalan pintas untuk merakit kembali (rebuild) sebuah folder proyek yang sudah dimodifikasi menjadi file `.apk`.
-- **Cara Pakai**: `bash build-apk.sh /path/ke/folder/proyek`.
-
-### 🕹️ cheat.sh
-- **Fungsi**: Konsep dasar buat nge-cheat game offline di Android dengan cara ngoprek memori.
-- **Peringatan**: BUTUH AKSES ROOT! Jangan ngeyel kalo gagal.
-- **Cara Pakai**: Jalankan `bash cheat.sh`. Baca kode script-nya biar lebih detail!
-
-### 📂 organizer.sh
-- **Fungsi**: Script utilitas untuk membantu merapikan file-file kerja atau hasil modifikasi di dalam direktori proyek.
-- **Cara Pakai**: `bash organizer.sh`.
-
-### 🛠️ install-java.sh & install-apktool.sh
-- **Fungsi**: Script pembantu untuk mengunduh dan meng-install dependensi utama seperti Java (OpenJDK) dan `apktool.jar` terbaru.
-- **Cara Pakai**: Jalankan di awal setup jika Anda belum memiliki dependensi tersebut.
-
-### ✅ permission-check.sh
-- **Fungsi**: Script sederhana untuk memeriksa dan memperbaiki izin (permission) file di dalam direktori kerja, memastikan semua script bisa dieksekusi.
-- **Cara Pakai**: `bash permission-check.sh`.
-
-### 📄 LICENSE
-- **Fungsi**: File lisensi (MIT License). Memberitahu orang lain bahwa mereka bebas menggunakan, memodifikasi, dan mendistribusikan ulang script ini.
-
----
-
-## ⚠️ Peringatan & Penafian
-
-* **Gunakan dengan Risiko Anda Sendiri**: Script ini adalah alat yang kuat. Kerusakan pada aplikasi atau perangkat Anda bukan tanggung jawab pengembang.
-* **Tujuan Edukasi**: _Toolkit_ ini dibuat untuk tujuan pembelajaran dan riset keamanan.
-* **Patuhi Hukum**: Jangan menggunakan alat ini untuk membajak, merusak, atau melakukan aktivitas ilegal lainnya yang melanggar hak cipta dan persyaratan layanan aplikasi.
-
+**Dibuat dengan ❤️ oleh mawwsenpai_**
+        

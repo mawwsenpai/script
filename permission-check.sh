@@ -1,107 +1,156 @@
 #!/bin/bash
 
-# ============================================================================
-#            PERMISSION-MANAGER.SH - Validator & Helper Izin Termux
-#       Script cerdas untuk memeriksa dan membantu mengelola semua
-#          izin penting yang dibutuhkan untuk modding & building.
-# ============================================================================
+# =================================================================================
+#      🔑 PERMISSION PRO - The Ultimate Termux Permissions Grandmaster 🔑
+# =================================================================================
+# Deskripsi:
+# Rombakan total menjadi asisten perizinan cerdas. Memeriksa dan memandu
+# pengguna untuk mengaktifkan semua izin krusial, termasuk "Akses Semua File"
+# untuk menembus batasan Android modern.
+# =================================================================================
 
-# --- Palet Warna & Style ---
-RED='\033[1;31m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'; BLUE='\033[1;34m'; NC='\033[0m'
-CYAN='\033[1;36m'; BOLD=$(tput bold); NORMAL=$(tput sgr0)
+# --- [1] KONFIGURASI TAMPILAN & WARNA (tput) ---
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+PURPLE=$(tput setaf 5)
+CYAN=$(tput setaf 6)
+WHITE=$(tput setaf 7)
+GRAY=$(tput setaf 8)
+NC=$(tput sgr0)
+BOLD=$(tput bold)
 
-# --- Variabel Status ---
+# --- [2] VARIABEL STATUS ---
 declare -A STATUS_CHECKS
 
-# --- Fungsi UI ---
+# --- [3] FUNGSI UTILITY & UI ---
+log_msg() {
+    local type="$1" color="$NC" prefix=""
+    case "$type" in
+        INFO)    prefix="[i] INFO"    ; color="$CYAN"   ;;
+        SUCCESS) prefix="[✓] SUKSES"  ; color="$GREEN"  ;;
+        WARN)    prefix="[!] PENTING" ; color="$YELLOW" ;;
+        ERROR)   prefix="[✘] MASALAH" ; color="$RED"    ;;
+        STEP)    prefix="[»] LANGKAH" ; color="$BLUE"   ;;
+    esac
+    echo -e "${BOLD}${color}${prefix}${NC} : $2"
+}
+
 print_header() {
     clear
     echo -e "${CYAN}${BOLD}"
-    echo "  ╔══════════════════════════════════════════════════════╗"
-    echo "  ║      🔑  PERMISSION MANAGER - Validator Izin  🔑       ║"
-    echo "  ╚══════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
+    echo '  █▀█ █▀▀ █▀█ █▀▄▀█ █─█ █▀─ █▀█ █─█  █▀█ █▀█ █▀'
+    echo '  █▀▄ ██▄ █▀▄ █░▀░█ █▀█ ██▄ █▄█ █▀▄  █▀▀ █▄█ ▄█'
+    echo -e "${RED}-----------------------------------------------------------${NC}"
+    echo -e "${BOLD}${WHITE}  The Ultimate Termux Permissions Grandmaster${NC}"
+    echo -e "${RED}-----------------------------------------------------------${NC}"
+    echo
 }
 
-log_step() { echo -e "\n${BLUE}${BOLD}--- [LANGKAH $1] $2 ---${NC}"; }
-log_check() { echo -e "  ${CYAN}↳  Status:${NC} $1"; }
+# --- [4] FUNGSI PEMERIKSAAN & PERBAIKAN ---
 
-# =================================================
-#               PROGRAM UTAMA
-# =================================================
-
-print_header
-
-# --- LANGKAH 1: Izin Storage Dasar ---
-log_step 1 "Memeriksa Izin Storage Dasar (/sdcard)"
-if [ -d "$HOME/storage/shared" ]; then
-    log_check "${GREEN}[✔ SIAP]${NC} Akses storage dasar sudah aktif."
-    STATUS_CHECKS["Storage Dasar"]="${GREEN}✔ SIAP${NC}"
-else
-    log_check "${RED}[✘ MASALAH]${NC} Akses storage dasar belum aktif."
-    read -p ">> Boleh saya jalankan 'termux-setup-storage' untuk meminta izin? (y/n): " confirm
-    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
-        termux-setup-storage
-        echo -e "${YELLOW}>> Silakan 'IZINKAN' pada pop-up yang muncul di HP Anda.${NC}"
-        echo -e "${CYAN}   Menunggu 5 detik sebelum memeriksa ulang...${NC}"
-        sleep 5
-        if [ -d "$HOME/storage/shared" ]; then
-            log_check "${GREEN}[✔ DIPERBAIKI]${NC} Izin storage berhasil diaktifkan!"
-            STATUS_CHECKS["Storage Dasar"]="${GREEN}✔ SIAP${NC}"
-        else
-            log_check "${RED}[✘ GAGAL]${NC} Izin masih belum aktif. Coba cek Pengaturan Aplikasi Android."
-            STATUS_CHECKS["Storage Dasar"]="${RED}✘ GAGAL${NC}"
-        fi
+# Izin 1: Storage Dasar
+check_storage_basic() {
+    log_msg STEP "Memeriksa Izin Storage Dasar (/sdcard)"
+    if [ -d "$HOME/storage/shared" ]; then
+        log_msg SUCCESS "Akses storage dasar sudah aktif."
+        STATUS_CHECKS["Storage Dasar"]="${GREEN}✔ SIAP${NC}"
     else
-        log_check "${YELLOW}[⚠ DILEWATI]${NC} Pengguna membatalkan perbaikan."
-        STATUS_CHECKS["Storage Dasar"]="${YELLOW}⚠ DILEWATI${NC}"
+        log_msg ERROR "Akses storage dasar belum aktif."
+        read -rp ">> Boleh saya jalankan 'termux-setup-storage' untuk meminta izin? (y/n): " confirm
+        if [[ "$confirm" == "y" ]]; then
+            termux-setup-storage
+            log_msg WARN "Silakan 'IZINKAN' pada pop-up yang muncul. Menunggu 5 detik..."
+            sleep 5
+            if [ -d "$HOME/storage/shared" ]; then
+                log_msg SUCCESS "Izin storage berhasil diaktifkan!"
+                STATUS_CHECKS["Storage Dasar"]="${GREEN}✔ SIAP${NC}"
+            else
+                log_msg ERROR "Izin masih belum aktif. Coba cek Pengaturan Aplikasi Android."
+                STATUS_CHECKS["Storage Dasar"]="${RED}✘ GAGAL${NC}"
+            fi
+        else
+            log_msg WARN "Dilewati. Banyak skrip mungkin tidak akan berfungsi."
+            STATUS_CHECKS["Storage Dasar"]="${YELLOW}⚠ DILEWATI${NC}"
+        fi
     fi
-fi
+}
 
-# --- LANGKAH 2: Izin Scoped Storage ---
-log_step 2 "Memeriksa Izin Scoped Storage (/Android/data)"
-if ls -l /sdcard/Android/data >/dev/null 2>&1; then
-    log_check "${GREEN}[✔ SIAP]${NC} Akses ke /Android/data tampaknya terbuka."
-    STATUS_CHECKS["Android/data"]="${GREEN}✔ SIAP${NC}"
-else
-    log_check "${YELLOW}[⚠ TERBATAS]${NC} Akses ke /Android/data dibatasi oleh sistem (Scoped Storage)."
-    echo -e "   ${CYAN}Ini normal di Android 11+. Untuk akses penuh, butuh metode lanjutan seperti Shizuku/LADB.${NC}"
-    STATUS_CHECKS["Android/data"]="${YELLOW}⚠ TERBATAS${NC}"
-fi
+# Izin 2: Akses Semua File (Sangat Penting)
+check_storage_all_files() {
+    log_msg STEP "Memeriksa Izin 'Akses Semua File' (untuk /Android/data)"
+    log_msg INFO "Izin ini krusial di Android 11+ untuk akses penuh."
+    if ls /sdcard/Android/data >/dev/null 2>&1; then
+        log_msg SUCCESS "Akses ke /Android/data tampaknya terbuka. Mantap!"
+        STATUS_CHECKS["Akses Semua File"]="${GREEN}✔ SIAP${NC}"
+    else
+        log_msg ERROR "Akses ke /Android/data dibatasi."
+        read -rp ">> Buka halaman pengaturan 'Akses Semua File' untuk Termux? (y/n): " confirm
+        if [[ "$confirm" == "y" ]]; then
+            log_msg INFO "Membuka Pengaturan Aplikasi..."
+            am start --user 0 -a android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION -d package:com.termux
+            log_msg WARN "Pada halaman yang terbuka, cari dan AKTIFKAN saklar untuk Termux."
+            STATUS_CHECKS["Akses Semua File"]="${YELLOW}⚠ PERIKSA MANUAL${NC}"
+        else
+            log_msg WARN "Dilewati. Akses ke folder data game akan gagal."
+            STATUS_CHECKS["Akses Semua File"]="${YELLOW}⚠ DILEWATI${NC}"
+        fi
+    fi
+}
 
-# --- LANGKAH 3: Izin Instalasi APK ---
-log_step 3 "Memeriksa Izin Instalasi APK dari Sumber Tidak Dikenal"
-log_check "${YELLOW}[ℹ️ INFO]${NC} Untuk menguji APK hasil build, Termux butuh izin 'Install unknown apps'."
-read -p ">> Buka halaman pengaturan Termux untuk mengaktifkan izin ini? (y/n): " confirm_install
-if [[ "$confirm_install" == "y" || "$confirm_install" == "Y" ]]; then
-    echo -e "${CYAN}   Membuka Pengaturan Aplikasi untuk Termux...${NC}"
-    am start --user 0 -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:com.termux
-    echo -e "${YELLOW}>> Pada halaman yang terbuka, cari dan aktifkan opsi 'Install unknown apps' atau 'Pasang aplikasi yang tidak dikenal'.${NC}"
-    STATUS_CHECKS["Instalasi APK"]="${YELLOW}⚠ PERIKSA MANUAL${NC}"
-else
-    STATUS_CHECKS["Instalasi APK"]="${YELLOW}⚠ DILEWATI${NC}"
-fi
+# Izin 3: Instalasi APK
+check_install_apps() {
+    log_msg STEP "Memeriksa Izin 'Instal Aplikasi Tidak Dikenal'"
+    log_msg INFO "Dibutuhkan untuk menginstal APK hasil modding/build langsung dari Termux."
+    read -rp ">> Buka halaman pengaturan 'Instal Aplikasi' untuk Termux? (y/n): " confirm
+    if [[ "$confirm" == "y" ]]; then
+        log_msg INFO "Membuka Pengaturan Aplikasi..."
+        am start --user 0 -a android.settings.MANAGE_UNKNOWN_APP_SOURCES -d package:com.termux
+        log_msg WARN "Pada halaman yang terbuka, AKTIFKAN saklar 'Izinkan dari sumber ini'."
+        STATUS_CHECKS["Instalasi APK"]="${YELLOW}⚠ PERIKSA MANUAL${NC}"
+    else
+        log_msg WARN "Dilewati. Anda harus menginstal APK secara manual."
+        STATUS_CHECKS["Instalasi APK"]="${YELLOW}⚠ DILEWATI${NC}"
+    fi
+}
 
-# --- LANGKAH 4: Akses Root (PERBAIKAN DI SINI) ---
-log_step 4 "Memeriksa Akses Root (Metode Akurat)"
-# Mencoba menjalankan perintah 'echo' sebagai root. Jika berhasil (exit code 0), maka root aktif.
-# Output dan error dialihkan ke /dev/null agar tidak muncul di layar.
-if su -c "echo" >/dev/null 2>&1; then
-    log_check "${GREEN}[✔ SIAP]${NC} Akses root fungsional terdeteksi."
-    STATUS_CHECKS["Akses Root"]="${GREEN}✔ SIAP${NC}"
-else
-    log_check "${YELLOW}[ℹ️ INFO]${NC} Tidak ada akses root fungsional. Ini normal untuk HP non-root."
-    STATUS_CHECKS["Akses Root"]="${YELLOW}ℹ️ TIDAK ADA (NORMAL)${NC}"
-fi
+# Izin 4: Akses Root
+check_root() {
+    log_msg STEP "Memeriksa Akses Root (Metode Akurat)"
+    if su -c "echo" >/dev/null 2>&1; then
+        log_msg SUCCESS "Akses root fungsional terdeteksi. Kekuatan tak terbatas!"
+        STATUS_CHECKS["Akses Root"]="${GREEN}✔ SIAP${NC}"
+    else
+        log_msg INFO "Tidak ada akses root. Ini normal untuk HP non-root."
+        STATUS_CHECKS["Akses Root"]="${GRAY}ℹ️ TIDAK ADA (NORMAL)${NC}"
+    fi
+}
 
-# --- LAPORAN STATUS AKHIR ---
-echo -e "\n${BLUE}${BOLD}======================================================"
-echo "              LAPORAN STATUS AKHIR Izin"
-echo -e "======================================================${NC}"
-printf '%-25s | %s\n' "Tipe Izin" "Status"
-echo "------------------------------------------------------"
-printf '%-25s | %s\n' "Storage Dasar (/sdcard)" "${STATUS_CHECKS['Storage Dasar']}"
-printf '%-25s | %s\n' "Scoped Storage (/Android/data)" "${STATUS_CHECKS['Android/data']}"
-printf '%-25s | %s\n' "Instalasi APK" "${STATUS_CHECKS['Instalasi APK']}"
-printf '%-25s | %s\n' "Akses Root" "${STATUS_CHECKS['Akses Root']}"
-echo "======================================================"
+# --- [5] PROGRAM UTAMA ---
+main() {
+    print_header
+    
+    check_storage_basic
+    echo
+    check_storage_all_files
+    echo
+    check_install_apps
+    echo
+    check_root
+    
+    # Laporan Status Akhir
+    echo
+    echo -e "  ${PURPLE}╔═════════════════════════════════════════════════════╗"
+    echo -e "  ${PURPLE}║${NC} ${BOLD}${WHITE}               LAPORAN STATUS AKHIR                ${PURPLE}║"
+    echo -e "  ${PURPLE}╚═════════════════════════════════════════════════════╝${NC}"
+    printf "  ${CYAN}%-25s${NC} : %s\n" "Storage Dasar" "${STATUS_CHECKS['Storage Dasar']}"
+    printf "  ${CYAN}%-25s${NC} : %s\n" "Akses Semua File" "${STATUS_CHECKS['Akses Semua File']}"
+    printf "  ${CYAN}%-25s${NC} : %s\n" "Instalasi APK" "${STATUS_CHECKS['Instalasi APK']}"
+    printf "  ${CYAN}%-25s${NC} : %s\n" "Akses Root" "${STATUS_CHECKS['Akses Root']}"
+    echo
+    log_msg SUCCESS "Pemeriksaan selesai. Sistem Anda sekarang lebih siap!"
+    echo
+}
+
+main
