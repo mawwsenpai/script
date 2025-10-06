@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#                 MAWW SCRIPT V28 - SIMPLE & SELF-CONTAINED
+#                 MAWW SCRIPT V30 - CUSTOM SERVER EDITION
 # ==============================================================================
 # Deskripsi:
-#   Versi yang disederhanakan secara total. Menghilangkan semua ketergantungan
-#   pada konfigurasi online (config.json, GitHub Pages). Script kini
-#   sepenuhnya mandiri dan hanya membutuhkan credentials.json secara lokal.
-#   Fokus pada stabilitas dan kemudahan setup maksimal.
+#   Versi final yang diadaptasi untuk bekerja dengan script local_server.py
+#   kustom dari pengguna. Menggabungkan ide server minimalis dengan
+#   eksekusi token exchange yang andal di sisi bash script.
 #
 # Dibuat oleh: Maww Senpai (dengan bantuan Gemini)
-# Versi: 28.0
+# Versi: 30.0
 # ==============================================================================
 
 # --- [ KONFIGURASI GLOBAL & FILE ] ---
@@ -18,12 +17,15 @@ readonly G_CREDS_FILE="credentials.json"
 readonly G_TOKEN_FILE="token.json"
 readonly PY_HELPER_TOKEN="handle_token.py"
 readonly PY_LISTENER="gmail_listener.py"
+readonly PY_LOCAL_SERVER="local_server.py"
+readonly AUTH_CODE_FILE="auth_code.tmp"
 readonly CONFIG_DEVICE="device.conf"
 readonly PID_FILE="listener.pid"
+readonly SERVER_PID_FILE="server.pid"
 readonly LOG_FILE="listener.log"
 readonly PATCH_FLAG=".patch_installed"
 readonly DOWNLOAD_DIR="$HOME/storage/shared/Download"
-readonly REDIRECT_URI="https://mawwscript.github.io/script/device/index.html"
+readonly REDIRECT_URI="http://localhost:8080"
 
 # --- [ PALET WARNA & TAMPILAN ] ---
 readonly C_RESET='\033[0m'; readonly C_RED='\033[0;31m'; readonly C_GREEN='\033[0;32m';
@@ -41,6 +43,39 @@ function _log_error() { echo -e "${C_RED}[✖] $@${C_RESET}"; }
 # --- [ GENERATOR SCRIPT PYTHON ] ---
 function _generate_py_scripts() {
 source "$CONFIG_DEVICE"
+
+# [Kustom] Menggunakan local_server.py buatan lo
+cat << 'EOF' > "$PY_LOCAL_SERVER"
+import http.server
+import socketserver
+from urllib.parse import urlparse, parse_qs
+
+PORT = 8080
+OUTPUT_FILE = "auth_code.tmp"
+
+class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        query_components = parse_qs(urlparse(self.path).query)
+        if 'code' in query_components:
+            auth_code = query_components["code"][0]
+            with open(OUTPUT_FILE, "w") as f: f.write(auth_code)
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><head><title>Berhasil</title><style>body{font-family:sans-serif;background:#1a1a1a;color:#e0e0e0;display:flex;justify-content:center;align-items:center;height:100vh;}h1{color:#4CAF50;}</style></head>")
+            self.wfile.write(b"<body><h1>&#9989; Kode diterima! Proses otomatis, silakan kembali ke Termux.</h1></body></html>")
+            self.server.server_close()
+        else:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Parameter 'code' tidak ditemukan.")
+
+with socketserver.TCPServer(("", PORT), MyRequestHandler) as server:
+    # print("Server minimalis berjalan di port 8080...")
+    server.serve_forever()
+EOF
+
+# Script handle_token.py untuk menukar kode menjadi token
 cat << EOF > "$PY_HELPER_TOKEN"
 import sys,os;from google_auth_oauthlib.flow import Flow
 if len(sys.argv)<2:print("Penggunaan: python handle_token.py <auth_code>",file=sys.stderr);sys.exit(1)
@@ -53,6 +88,8 @@ try:
     print(f"SUKSES: File '{token_file}' berhasil dibuat.")
 except Exception as e:print(f"ERROR: Gagal menukar kode. Pastikan URI di Google Console benar. Detail: {e}",file=sys.stderr);sys.exit(1)
 EOF
+
+# Script listener utama (tetap sama)
 cat << EOF > "$PY_LISTENER"
 import os,sys,subprocess,logging,base64,time;from google.oauth2.credentials import Credentials;from googleapiclient.discovery import build;from google.auth.transport.requests import Request;from email.mime.multipart import MIMEMultipart;from email.mime.text import MIMEText;from email.mime.base import MIMEBase;from email import encoders
 SCOPES=['https://www.googleapis.com/auth/gmail.modify'];TOKEN_FILE='$G_TOKEN_FILE';MY_EMAIL='$MY_EMAIL';CMD_SUBJECT='$CMD_SUBJECT';LOG_FILE='$LOG_FILE';POLL_INTERVAL=180
@@ -96,11 +133,11 @@ if __name__=='__main__':main_loop()
 EOF
 }
 
-# --- [ FUNGSI INTI ] ---
+# --- [ FUNGSI INTI (SETUP DIROMBAK TOTAL) ] ---
 function setup() {
     clear; display_header
-    _log_header "Setup / Konfigurasi Ulang (Mode Simple)"
-    rm -f "$G_TOKEN_FILE"
+    _log_header "Setup / Konfigurasi Ulang (Mode Server Kustom)"
+    rm -f "$G_TOKEN_FILE" "$SERVER_PID_FILE" "$AUTH_CODE_FILE"
 
     if [ ! -f "$CONFIG_DEVICE" ]; then
         _log_info "Membuat file konfigurasi baru..."
@@ -108,65 +145,76 @@ function setup() {
         read -r -p "$(echo -e "${C_CYAN}> Masukkan Subjek Perintah Rahasia: ${C_RESET}")" subject_input
         echo "MY_EMAIL=\"$email_input\"" > "$CONFIG_DEVICE"
         echo "CMD_SUBJECT=\"$subject_input\"" >> "$CONFIG_DEVICE"
-        _log_ok "Konfigurasi berhasil disimpan di '$CONFIG_DEVICE'."
+        _log_ok "Konfigurasi berhasil disimpan."
     fi
-    source "$CONFIG_DEVICE"
 
     _log_info "Memeriksa file kredensial '$G_CREDS_FILE'..."
     if [ ! -f "$G_CREDS_FILE" ]; then
         if ! cp "$DOWNLOAD_DIR/$G_CREDS_FILE" .; then
             _log_error "GAGAL: '$G_CREDS_FILE' tidak ditemukan di folder Download."
-            _log_warn "Pastikan Anda sudah mengunduh file kredensial dari Google Cloud."
             return
         fi
-        _log_ok "Berhasil menyalin '$G_CREDS_FILE' dari folder Download."
+        _log_ok "Berhasil menyalin '$G_CREDS_FILE'."
     fi
     
-    _log_info "Membaca Client ID langsung dari '$G_CREDS_FILE'..."
-    local client_id
-    client_id=$(grep -o '"client_id": *"[^"]*"' "$G_CREDS_FILE" | grep -o '"[^"]*"$' | tr -d '"')
-    if [ -z "$client_id" ]; then
-        _log_error "GAGAL: Tidak bisa membaca client_id dari '$G_CREDS_FILE'."
-        _log_warn "Pastikan file '$G_CREDS_FILE' tidak rusak dan formatnya benar."
-        return
-    fi
-    _log_ok "Client ID berhasil dibaca."
-
-    _log_info "Membuat helper script Python..."
+    _log_info "Membuat script yang dibutuhkan..."
     _generate_py_scripts
+
+    _log_info "Membaca Client ID dari '$G_CREDS_FILE'..."
+    local client_id; client_id=$(grep -o '"client_id": *"[^"]*"' "$G_CREDS_FILE" | grep -o '"[^"]*"$' | tr -d '"')
+    if [ -z "$client_id" ]; then _log_error "GAGAL: Tidak bisa membaca client_id dari '$G_CREDS_FILE'."; return; fi
     
     local scope="https://www.googleapis.com/auth/gmail.modify"
-    local auth_url="https://accounts.google.com/o/oauth2/v2/auth?scope=${scope}&redirect_uri=${REDIRECT_URI}&response_type=code&client_id=${client_id}&access_type=offline&prompt=select_account"
-    
-    _log_info "Membuka browser untuk otentikasi..."
-    am start -a android.intent.action.VIEW -d "$auth_url"
-    
-    _log_header "INSTRUKSI MANUAL"
-    _log_warn "1. Selesaikan login & berikan izin di browser."
-    _log_warn "2. Anda akan diarahkan ke halaman GitHub Pages."
-    _log_warn "3. Salin kode yang ditampilkan di halaman itu."
-    
-    while true; do
-        read -r -p "$(echo -e "${C_CYAN}> Paste kode di sini (atau 'q' untuk keluar): ${C_RESET}")" manual_code
-        if [[ "$manual_code" == "q" ]]; then _log_info "Setup dibatalkan."; return; fi
-        if [ -z "$manual_code" ]; then _log_error "Input kosong. Silakan paste kodenya."; continue; fi
-        if python "$PY_HELPER_TOKEN" "$manual_code"; then break
-        else _log_error "Kode salah atau tidak valid. Coba lagi."; fi
+    local auth_url="https://accounts.google.com/o/oauth2/v2/auth?scope=${scope}&access_type=offline&response_type=code&prompt=select_account&redirect_uri=${REDIRECT_URI}&client_id=${client_id}"
+
+    _log_header "INSTRUKSI OTENTIKASI"
+    _log_info "Menjalankan server lokal di background..."
+    nohup python "$PY_LOCAL_SERVER" >/dev/null 2>&1 &
+    echo $! > "$SERVER_PID_FILE"
+    sleep 1
+
+    _log_ok "Server berjalan! (PID: $(cat "$SERVER_PID_FILE"))"
+    _log_warn "Langkah 1: COPY dan BUKA URL di bawah ini di browser."
+    echo -e "${C_BOLD}${C_YELLOW}    ${auth_url}${C_RESET}"
+    _log_warn "Langkah 2: Selesaikan login & berikan izin."
+    _log_warn "Langkah 3: Halaman browser akan menampilkan 'Kode diterima'."
+    _log_info "Script ini menunggu kode otorisasi dari server..."
+
+    # Menunggu file auth_code.tmp dibuat oleh server
+    local count=0
+    while [ ! -f "$AUTH_CODE_FILE" ]; do
+        echo -n "."
+        sleep 2
+        count=$((count+1))
+        if [ $count -gt 150 ]; then # Timeout 5 menit
+            _log_error "\nTimeout! Gagal mendapatkan kode dalam 5 menit."
+            if [ -f "$SERVER_PID_FILE" ]; then kill "$(cat "$SERVER_PID_FILE")"; rm "$SERVER_PID_FILE"; fi
+            return
+        fi
     done
     
-    if [ -f "$G_TOKEN_FILE" ]; then
+    echo # Baris baru
+    local auth_code; auth_code=$(cat "$AUTH_CODE_FILE")
+    _log_ok "Kode otorisasi berhasil diterima!"
+    _log_info "Menukar kode dengan token akses..."
+    
+    if python "$PY_HELPER_TOKEN" "$auth_code"; then
         _log_ok "🎉 SETUP SELESAI! Otorisasi berhasil."
     else
-        _log_error "SETUP GAGAL."
+        _log_error "SETUP GAGAL. Gagal menukar kode dengan token."
     fi
+
+    # Membersihkan file sementara
+    rm -f "$AUTH_CODE_FILE" "$SERVER_PID_FILE"
 }
 
+# --- Fungsi Start, Stop, Logs, dll tetap sama ---
 function start() { clear;display_header;_log_header "Memulai Listener"; if [ ! -f "$CONFIG_DEVICE" ]||[ ! -f "$G_TOKEN_FILE" ];then _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup' (3) dulu.";return;fi;if [ -f "$PID_FILE" ]&&ps -p "$(cat "$PID_FILE")" >/dev/null;then _log_warn "Listener sudah berjalan.";return;fi;_generate_py_scripts;nohup python "$PY_LISTENER" >/dev/null 2>&1 & echo $! > "$PID_FILE";_log_ok "Listener dimulai (PID: $(cat "$PID_FILE")). Cek log di '$LOG_FILE'." ;}
 function stop() { clear;display_header;_log_header "Menghentikan Listener"; if [ ! -f "$PID_FILE" ];then _log_warn "Listener tidak sedang berjalan.";return;fi;local pid; pid=$(cat "$PID_FILE");if ps -p "$pid" >/dev/null;then kill "$pid";rm -f "$PID_FILE";_log_ok "Listener (PID: $pid) telah dihentikan.";else _log_warn "Proses (PID: $pid) tidak ditemukan. File PID dihapus.";rm -f "$PID_FILE";fi;}
 function logs() { clear;display_header;_log_header "Melihat Log Realtime";if [ ! -f "$LOG_FILE" ];then _log_warn "File log belum ada.";return;fi;_log_info "Menampilkan log... Tekan ${C_BOLD}Ctrl+C${C_RESET} untuk keluar."; echo; tail -f "$LOG_FILE" ;}
-function cleanup() { clear;display_header;_log_header "Pembersihan Total";_log_warn "Ini akan menghapus SEMUA file konfigurasi & token.";
+function cleanup() { clear;display_header;_log_header "Pembersihan Total";_log_warn "Ini akan menghapus SEMUA file terkait script ini.";
     read -r -p "$(echo -e "${C_YELLOW}> Anda yakin ingin melanjutkan? (y/n): ${C_RESET}")" confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]];then stop >/dev/null 2>&1||true;_log_info "Menghapus file...";rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$PY_HELPER_TOKEN" "$PY_LISTENER" ".patch_installed" "$LOG_FILE" "$PID_FILE";_log_ok "Pembersihan selesai.";else _log_info "Pembersihan dibatalkan.";fi;}
+    if [[ "$confirm" =~ ^[Yy]$ ]];then stop >/dev/null 2>&1||true;_log_info "Menghapus file...";rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$PY_HELPER_TOKEN" "$PY_LISTENER" ".patch_installed" "$LOG_FILE" "$PID_FILE" "$SERVER_PID_FILE" "$PY_LOCAL_SERVER" "$AUTH_CODE_FILE";_log_ok "Pembersihan selesai.";else _log_info "Pembersihan dibatalkan.";fi;}
 function run_patcher() { set -e;clear;display_header;_log_header "Persiapan Lingkungan Otomatis";
     readonly PKS=("python" "termux-api" "coreutils" "curl");
     readonly PYR=("google-api-python-client" "google-auth-httplib2" "google-auth-oauthlib");_log_info "${C_BOLD}Langkah 1/3:${C_RESET} Memeriksa paket sistem...";pkg update -y >/dev/null 2>&1;for p in "${PKS[@]}";do if ! dpkg -s "$p">/dev/null 2>&1;then _log_warn "Menginstal '$p'...";pkg install -y "$p";fi;done;_log_ok "Paket sistem siap.";_log_info "${C_BOLD}Langkah 2/3:${C_RESET} Memeriksa library Python...";for r in "${PYR[@]}";do if ! pip show "$r">/dev/null 2>&1;then _log_warn "Menginstal '$r'...";pip install --no-cache-dir "$r";fi;done;_log_ok "Library Python siap.";_log_info "${C_BOLD}Langkah 3/3:${C_RESET} Izin penyimpanan...";if [ ! -d "$HOME/storage/shared" ];then termux-setup-storage;_log_warn "Izin diminta...";sleep 5;fi;_log_ok "Izin penyimpanan siap.";echo;_log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅";set +e;}
@@ -179,9 +227,9 @@ function display_header() {
         status_text="TIDAK AKTIF"; status_color="$C_RED"
     fi
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
-    echo -e "${C_BOLD}${C_WHITE}   Ⓜ Ⓐ Ⓦ Ⓦ    Ⓢ Ⓒ Ⓡ Ⓘ Ⓟ Ⓣ   v28 (Simple Mode)${C_RESET}"
+    echo -e "${C_BOLD}${C_WHITE}   Ⓜ Ⓐ Ⓦ Ⓦ    Ⓢ Ⓒ Ⓡ Ⓘ Ⓟ Ⓣ   v30 (Custom Server)${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
-    printf "%-10s %-20s %s\n" " Status" ": ${status_color}${text_status}${C_RESET}" "${C_YELLOW}${pid_text}${C_RESET}"
+    printf "%-10s %-20s %s\n" " Status" ": ${status_color}${status_text}${C_RESET}" "${C_YELLOW}${pid_text}${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
 }
 function display_menu() {
@@ -213,6 +261,7 @@ function main() {
         _log_header "Selamat Datang di Maww Script!"
         _log_info "Ini eksekusi pertama, skrip akan menyiapkan lingkungan."
         _log_warn "Pastikan 'credentials.json' ada di folder Download."
+        _log_warn "Pastikan URI 'http://localhost:8080' sudah ditambahkan di Google Console."
         read -p "   Tekan [Enter] untuk memulai persiapan..."
         run_patcher
         _log_info "Membuat file penanda penyelesaian..."
@@ -220,6 +269,8 @@ function main() {
         _log_ok "Penanda '.patch_installed' berhasil dibuat."
         read -p "   Tekan [Enter] untuk lanjut ke menu utama..."
     fi
+    # Pastikan tidak ada server zombie yang berjalan
+    if [ -f "$SERVER_PID_FILE" ]; then rm -f "$SERVER_PID_FILE"; fi
     while true; do
         clear
         display_header
