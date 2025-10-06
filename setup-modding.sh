@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # =================================================================================
-#               Maww-Toolkit v7.4 - Edisi Final: Simpel & Bulletproof
+#               Maww-Toolkit v7.4.1 - Fix Syntax Error (esak -> esac)
 #                      Powered by Maww-Core Engine v1.4
 # =================================================================================
 
 # --- [1] KONFIGURASI GLOBAL & WARNA ---
 C_RED='\033[1;31m'; C_GREEN='\033[1;32m'; C_YELLOW='\033[1;33m'; C_BLUE='\033[1;34m';
 C_CYAN='\033[1;36m'; C_NC='\033[0m'
-TOOLKIT_VERSION="v7.4"
+TOOLKIT_VERSION="v7.4.1"
 TOOLS_DIR="$HOME/tools"; BIN_DIR="/data/data/com.termux/files/usr/bin"
 SDK_ROOT="$HOME/tools/android-sdk"
 mkdir -p "$TOOLS_DIR" 2>/dev/null
@@ -238,7 +238,7 @@ manage_sdk() {
             echo -e "${C_GREEN}✅ Dihapus.${C_NC}";
             ;;
         *) return ;;
-    esak
+    esac # <--- Perbaikan syntax di sini (esak -> esac)
     echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r
 }
 
