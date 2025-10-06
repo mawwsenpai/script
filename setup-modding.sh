@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # =================================================================================
-#               Maww-Toolkit v7.3 - Edisi Final: Minimalis & Robust
-#                      Powered by Maww-Core Engine v1.3
+#               Maww-Toolkit v7.4 - Edisi Final: Simpel & Bulletproof
+#                      Powered by Maww-Core Engine v1.4
 # =================================================================================
 
 # --- [1] KONFIGURASI GLOBAL & WARNA ---
 C_RED='\033[1;31m'; C_GREEN='\033[1;32m'; C_YELLOW='\033[1;33m'; C_BLUE='\033[1;34m';
 C_CYAN='\033[1;36m'; C_NC='\033[0m'
-TOOLKIT_VERSION="v7.3"
+TOOLKIT_VERSION="v7.4"
 TOOLS_DIR="$HOME/tools"; BIN_DIR="/data/data/com.termux/files/usr/bin"
 SDK_ROOT="$HOME/tools/android-sdk"
 mkdir -p "$TOOLS_DIR" 2>/dev/null
@@ -49,7 +49,7 @@ spinner() {
 print_header() {
     clear
     echo -e "${C_CYAN}================================================================${C_NC}"
-    echo -e "${C_CYAN}# ${C_NC}${C_YELLOW}Maww-Toolkit $TOOLKIT_VERSION: Minimalis & Robust${C_NC}"
+    echo -e "${C_CYAN}# ${C_NC}${C_YELLOW}Maww-Toolkit $TOOLKIT_VERSION: Simpel & Bulletproof${C_NC}"
     echo -e "${C_CYAN}# ${C_NC}Manajemen Tool Modding & Analisis Aplikasi"
     echo -e "${C_CYAN}================================================================${C_NC}"
     echo
@@ -57,7 +57,7 @@ print_header() {
 
 get_latest_github_version() {
     local REPO="$1"
-    # Mengambil semua rilis untuk mencari versi stabil/terbaru yang valid
+    # Mengambil versi terbaru dari rilis pertama yang ditemukan
     wget -qO- "https://api.github.com/repos/$REPO/releases" 2>/dev/null | \
         jq -r '.[0].tag_name' 2>/dev/null | sed 's/v//'
 }
@@ -82,15 +82,15 @@ print_status_line() {
     if [ -n "$version" ] && [[ "$version" != "Terinstal" ]]; then
         STATUS_TEXT="[✔ $version]"; STATUS_COLOR="${C_GREEN}"
     elif [ -n "$version" ] && [[ "$version" == "Terinstal" ]]; then
-        STATUS_TEXT="[✔ TERINSTAL]"; STATUS_COLOR="${C_GREEN}"
+        STATUS_TEXT="[✔ INSTAL]"; STATUS_COLOR="${C_GREEN}"
     elif [ -n "$rec_ver" ] && [[ "$rec_ver" != "||" ]]; then
         STATUS_TEXT="[✘ Target $rec_ver]"; STATUS_COLOR="${C_RED}"
     else
         STATUS_TEXT="[✘ BELUM ADA]"; STATUS_COLOR="${C_RED}"
     fi
 
-    # Format lebih rapi dan padat
-    printf " %s[%-2s]%s %-20s %s%-18s%s %s\n" "${C_CYAN}" "$id" "${C_NC}" "$name" "$STATUS_COLOR" "$STATUS_TEXT" "${C_NC}" "$desc"
+    # Format ringkas dan rapi
+    printf " %s[%-2s]%s %-18s %s%-15s%s %s\n" "${C_CYAN}" "$id" "${C_NC}" "$name" "$STATUS_COLOR" "$STATUS_TEXT" "${C_NC}" "$desc"
 }
 
 check_dependencies() {
@@ -106,22 +106,19 @@ check_dependencies() {
     fi
 }
 
-# --- [4] MAWW-CORE ENGINE: FUNGSI INSTALASI SPESIFIK ---
+# --- [4] FUNGSI INSTALASI SPESIFIK (INTI) ---
 
-# Pemasangan/Unduhan GitHub yang Anti-Gagal
 manage_github_tool() {
     local NAME="$1" REPO="$2" FILENAME_PATTERN="$3" BIN_NAME="$4" RECOMMENDED_VERSION="$5"
-    print_header; echo -e "${C_CYAN}---[ Manajer: $NAME ]---${C_NC}"
     
+    echo -e "\n${C_CYAN}--- Manajer: $NAME ---${C_NC}"
     echo -e "${C_YELLOW}⚙️  Menganalisis versi...${C_NC}"; 
     LATEST_VERSION=$(get_latest_github_version "$REPO")
     CURRENT_VERSION=$(get_version "github" "" "$BIN_NAME")
 
-    echo -e "Status Terinstal: ${C_GREEN}${CURRENT_VERSION:-'Belum Terinstal'}${C_NC}"
-    echo -e "Versi Stabil/Rekomendasi: ${C_YELLOW}$RECOMMENDED_VERSION${C_NC}"
-    echo -e "Versi Terbaru Ditemukan: ${C_BLUE}${LATEST_VERSION:-'Tidak Terdeteksi'}${C_NC}"
+    echo -e "Status: ${C_GREEN}${CURRENT_VERSION:-'Belum Terinstal'}${C_NC} (Stabil: ${C_YELLOW}$RECOMMENDED_VERSION${C_NC} | Terbaru: ${C_BLUE}${LATEST_VERSION:-'N/A'}${C_NC})"
     
-    echo -e "\n [${C_YELLOW}S${C_NC}] Instal ${C_YELLOW}Stabil${C_NC} | [${C_BLUE}L${C_NC}] Instal ${C_BLUE}Terbaru${C_NC} | [${C_RED}H${C_NC}] Hapus | [${C_CYAN}B${C_NC}] Batal"
+    echo -e "\n [${C_YELLOW}S${C_NC}] Instal Stabil | [${C_BLUE}L${C_NC}] Instal Terbaru | [${C_RED}H${C_NC}] Hapus | [${C_CYAN}B${C_NC}] Batal"
     read -p ">> Pilih opsi instalasi: " choice
 
     local VERSION_TO_INSTALL=""
@@ -135,42 +132,47 @@ manage_github_tool() {
         *) return ;;
     esac
     
-    if [ -z "$VERSION_TO_INSTALL" ] || [[ "$VERSION_TO_INSTALL" == "null" ]]; then echo -e "${C_RED}❌ Versi tidak valid atau tidak ditemukan!${C_NC}"; echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r; return; fi
+    if [ -z "$VERSION_TO_INSTALL" ] || [[ "$VERSION_TO_INSTALL" == "null" ]]; then echo -e "${C_RED}❌ Versi tidak ditemukan!${C_NC}"; echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r; return; fi
     
     echo -e "${C_YELLOW}⏳ Memulai Unduhan $NAME v$VERSION_TO_INSTALL...${C_NC}"
     
-    # Ambil rilis secara keseluruhan
     RELEASES_JSON=$(wget -qO- "https://api.github.com/repos/$REPO/releases" 2>/dev/null)
     DOWNLOAD_URL=""
+    LOCAL_FILENAME="$TOOLS_DIR/$FILENAME_PATTERN" # Default filename
 
     if [[ "$FILENAME_PATTERN" == "jadx" ]]; then
-        # Cari file ZIP no-jre
-        DOWNLOAD_URL=$(echo "$RELEASES_JSON" | jq -r ".[] | select(.tag_name | contains(\"$VERSION_TO_INSTALL\")) | .assets[] | select(.name | contains(\"jadx-\") and contains(\"no-jre.zip\")) | .browser_download_url" | head -n 1)
-        if [ -z "$DOWNLOAD_URL" ]; then echo -e "${C_RED}❌ Link download JADX v$VERSION_TO_INSTALL tidak ditemukan!${C_NC}"; echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r; return; fi
-        
-        (wget -qO "$TOOLS_DIR/jadx.zip" "$DOWNLOAD_URL") & spinner
-        
-        echo -e "\n${C_YELLOW}✅ Unduhan Selesai. Mengekstrak dan Konfigurasi...${C_NC}"
-        rm -rf "$TOOLS_DIR/jadx-engine" 2>/dev/null
-        unzip -qo "$TOOLS_DIR/jadx.zip" -d "$TOOLS_DIR/" 
-        mv "$TOOLS_DIR"/jadx-*-no-jre "$TOOLS_DIR/jadx-engine" 2>/dev/null
-        ln -sfr "$TOOLS_DIR/jadx-engine/bin/jadx" "$BIN_DIR/jadx" 2>/dev/null
-        rm "$TOOLS_DIR/jadx.zip"
-    else # Untuk file .jar (Apktool, Signer)
-        # Cari file JAR berdasarkan nama file yang diminta
+        # JADX: Cari file ZIP yang paling general (jadx-VERSION.zip)
+        DOWNLOAD_URL=$(echo "$RELEASES_JSON" | jq -r ".[] | select(.tag_name | contains(\"$VERSION_TO_INSTALL\")) | .assets[] | select(.name | test(\"jadx-$VERSION_TO_INSTALL\\.zip\")) | .browser_download_url" | head -n 1)
+        LOCAL_FILENAME="$TOOLS_DIR/jadx-$VERSION_TO_INSTALL.zip"
+    elif [[ "$FILENAME_PATTERN" == "apktool.jar" ]]; then
+        # APKTOOL: Cari file JAR dengan pola 'apktool_VERSION.jar' atau 'apktool.jar'
+        DOWNLOAD_URL=$(echo "$RELEASES_JSON" | jq -r ".[] | select(.tag_name | contains(\"$VERSION_TO_INSTALL\")) | .assets[] | select(.name | test(\"apktool.*jar\")) | .browser_download_url" | head -n 1)
+        LOCAL_FILENAME="$TOOLS_DIR/apktool_latest.jar"
+    else 
+        # Uber Signer dan lainnya (cari nama file JAR)
         DOWNLOAD_URL=$(echo "$RELEASES_JSON" | jq -r ".[] | select(.tag_name | contains(\"$VERSION_TO_INSTALL\")) | .assets[] | select(.name | contains(\"$FILENAME_PATTERN\")) | .browser_download_url" | head -n 1)
-        
-        # Fallback untuk Apktool jika nama file JAR-nya spesifik
-        if [ "$NAME" == "Apktool" ] && [ -z "$DOWNLOAD_URL" ]; then
-            DOWNLOAD_URL=$(echo "$RELEASES_JSON" | jq -r ".[] | select(.tag_name | contains(\"$VERSION_TO_INSTALL\")) | .assets[] | select(.name | contains(\"apktool_\")) | .browser_download_url" | head -n 1)
-            FILENAME_PATTERN="apktool_latest.jar" # Ganti nama file lokal agar konsisten
-        fi
-        
-        if [ -z "$DOWNLOAD_URL" ]; then echo -e "${C_RED}❌ Link download $NAME v$VERSION_TO_INSTALL tidak ditemukan!${C_NC}"; echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r; return; fi
-        
-        (wget -qO "$TOOLS_DIR/$FILENAME_PATTERN" "$DOWNLOAD_URL") & spinner
-        
-        echo -e "\n${C_YELLOW}✅ Unduhan Selesai. Membuat Symlink Executable...${C_NC}"
+    fi
+    
+    if [ -z "$DOWNLOAD_URL" ]; then echo -e "${C_RED}❌ Link unduhan $NAME v$VERSION_TO_INSTALL tidak ditemukan (API error/file not found)!${C_NC}"; echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r; return; fi
+    
+    # Proses unduhan
+    if ! (wget -qO "$LOCAL_FILENAME" "$DOWNLOAD_URL") & spinner; then
+        echo -e "\n${C_RED}❌ GAGAL: Proses unduhan terhenti atau gagal!${C_NC}"; echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r; return
+    fi
+    
+    echo -e "\n${C_GREEN}✅ Unduhan Selesai.${C_NC}"
+
+    if [[ "$FILENAME_PATTERN" == "jadx" ]]; then
+        echo -e "${C_YELLOW}Mengekstrak dan Konfigurasi JADX...${C_NC}"
+        rm -rf "$TOOLS_DIR/jadx-engine" 2>/dev/null
+        unzip -qo "$LOCAL_FILENAME" -d "$TOOLS_DIR/" 
+        mv "$TOOLS_DIR"/jadx-*-* "$TOOLS_DIR/jadx-engine" 2>/dev/null
+        ln -sfr "$TOOLS_DIR/jadx-engine/bin/jadx" "$BIN_DIR/jadx" 2>/dev/null
+        rm "$LOCAL_FILENAME"
+    else # Untuk file .jar
+        echo -e "${C_YELLOW}Membuat Symlink Executable...${C_NC}"
+        # Pindahkan file yang baru diunduh ke nama yang diharapkan oleh script
+        mv "$LOCAL_FILENAME" "$TOOLS_DIR/$FILENAME_PATTERN" 2>/dev/null
         echo "#!/bin/bash\njava -jar \"$TOOLS_DIR/$FILENAME_PATTERN\" \"\$@\"" >"$BIN_DIR/$BIN_NAME"
         chmod +x "$BIN_DIR/$BIN_NAME"
     fi
@@ -180,12 +182,13 @@ manage_github_tool() {
     echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r
 }
 
-# SDK, Pkg, Pip Manager juga diubah agar tidak langsung tertutup.
+# Fungsi Pkg, Pip, SDK (tetap ringkas dan diakhiri read -r)
+
 manage_pkg_tool() {
     local NAME="$1" PKG_NAME="$2"
     CURRENT_VERSION=$(get_version "pkg" "$PKG_NAME")
-    print_header; echo -e "${C_CYAN}---[ Manajer: $NAME (via Pkg) ]---${C_NC}"
-    echo -e "Status Terinstal: ${C_GREEN}${CURRENT_VERSION:-'Belum Terinstal'}${C_NC}\n"
+    echo -e "\n${C_CYAN}--- Manajer: $NAME (via Pkg) ---${C_NC}"
+    echo -e "Status: ${C_GREEN}${CURRENT_VERSION:-'Belum Terinstal'}${C_NC}\n"
     echo -e " [${C_GREEN}I${C_NC}] Instal/Update | [${C_RED}H${C_NC}] Hapus | [${C_CYAN}B${C_NC}] Batal"
     read -p ">> Pilihan: " choice
     case "$choice" in
@@ -199,8 +202,8 @@ manage_pkg_tool() {
 manage_pip_tool() {
     local NAME="$1" PKG_NAME="$2"
     CURRENT_VERSION=$(get_version "pip" "$PKG_NAME")
-    print_header; echo -e "${C_CYAN}---[ Manajer: $NAME (via Pip) ]---${C_NC}"
-    echo -e "Status Terinstal: ${C_GREEN}${CURRENT_VERSION:-'Belum Terinstal'}${C_NC}\n"
+    echo -e "\n${C_CYAN}--- Manajer: $NAME (via Pip) ---${C_NC}"
+    echo -e "Status: ${C_GREEN}${CURRENT_VERSION:-'Belum Terinstal'}${C_NC}\n"
     echo -e " [${C_GREEN}I${C_NC}] Instal/Update | [${C_RED}H${C_NC}] Hapus | [${C_CYAN}B${C_NC}] Batal"
     read -p ">> Pilihan: " choice
     case "$choice" in
@@ -212,13 +215,13 @@ manage_pip_tool() {
 }
 
 manage_sdk() {
-    print_header; echo -e "${C_CYAN}---[ Manajer: Android SDK ]---${C_NC}"
+    echo -e "\n${C_CYAN}--- Manajer: Android SDK ---${C_NC}"
     if [ -d "$SDK_ROOT/build-tools" ]; then
         LATEST_BUILD_TOOLS=$(ls "$SDK_ROOT/build-tools" | sort -V | tail -n 1)
-        echo -e "Status Terinstal: ${C_GREEN}Terinstal (Build-Tools $LATEST_BUILD_TOOLS)${C_NC}\n"
+        echo -e "Status: ${C_GREEN}Terinstal (Build-Tools $LATEST_BUILD_TOOLS)${C_NC}\n"
         echo -e " [${C_YELLOW}I${C_NC}] Update/Reinstall | [${C_RED}H${C_NC}] Hapus Total | [${C_CYAN}B${C_NC}] Batal"
     else
-        echo -e "Status Terinstal: ${C_RED}Belum Terinstal${C_NC}\n"
+        echo -e "Status: ${C_RED}Belum Terinstal${C_NC}\n"
         echo -e " [${C_GREEN}I${C_NC}] Instal SDK Manager & Tools | [${C_CYAN}B${C_NC}] Batal"
     fi
     read -p ">> Pilihan: " choice
@@ -230,17 +233,15 @@ manage_sdk() {
             ;;
         [Hh]) 
             echo -e "${C_RED}Menghapus folder SDK total...${C_NC}"; rm -rf "$SDK_ROOT"; 
-            # Hapus PATH dari bashrc/zshrc juga
             local PROFILE_FILE="$HOME/.bashrc"; if [ -f "$HOME/.zshrc" ]; then PROFILE_FILE="$HOME/.zshrc"; fi
             sed -i '/# Konfigurasi Android SDK oleh Maww-Toolkit/,$d' "$PROFILE_FILE" 2>/dev/null
             echo -e "${C_GREEN}✅ Dihapus.${C_NC}";
             ;;
         *) return ;;
-    esac
+    esak
     echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r
 }
 
-# Konfigurasi SDK yang Jelas (dipisah agar bisa dipanggil otomatis)
 func_configure_sdk_core(){ 
     local PROFILE_FILE="$HOME/.bashrc"
     if [ -f "$HOME/.zshrc" ]; then PROFILE_FILE="$HOME/.zshrc"; fi
@@ -294,10 +295,10 @@ while true; do
     done
     
     echo
-    echo -e " ${C_GREEN}[A]${C_NC} Instalasi Wajib (Java, SDK, Apktool, JADX, Signer)"
-    echo -e " ${C_RED}[Q]${C_NC} Keluar dari Toolkit"
+    echo -e " ${C_GREEN}[A]${C_NC} Instalasi Wajib (5 Tools) - ${C_YELLOW}Disarankan!${C_NC}"
+    echo -e " ${C_RED}[Q]${C_NC} Keluar"
     echo
-    read -p ">> Masukkan [Nomor Tool] untuk Manajer, atau [A/Q]: " choice
+    read -p ">> Masukkan [Nomor Tool] / [A/Q]: " choice
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#TOOLS_DB[@]} ]; then
         tool_index=$((choice - 1))
@@ -312,33 +313,33 @@ while true; do
     else
         case "$choice" in
             [Aa])
-                print_header; echo -e "${C_YELLOW}Memulai Instalasi Wajib (A): Simple & Berurutan...${C_NC}"
+                print_header; echo -e "${C_YELLOW}Memulai Instalasi Wajib (A)...${C_NC}"
                 
                 # 1. Java
-                echo -e "\n${C_CYAN}--- [1/5] Menginstal Java (OpenJDK 17) ---${C_NC}"
+                echo -e "\n${C_CYAN}--- [1/5] Java (OpenJDK 17) ---${C_NC}"
                 manage_pkg_tool "Java (OpenJDK 17)" "openjdk-17"
 
                 # 2. Android SDK
-                echo -e "\n${C_CYAN}--- [2/5] Menginstal & Konfigurasi Android SDK ---${C_NC}"
+                echo -e "\n${C_CYAN}--- [2/5] Android SDK ---${C_NC}"
                 func_configure_sdk_core
                 echo -e "${C_GREEN}✅ Android SDK OK.${C_NC}"; echo -e "${C_YELLOW}Tekan [Enter] untuk lanjut...${C_NC}"; read -r
                 
                 # 3. Apktool
-                echo -e "\n${C_CYAN}--- [3/5] Menginstal Apktool (Stabil) ---${C_NC}"
+                echo -e "\n${C_CYAN}--- [3/5] Apktool (Stabil) ---${C_NC}"
                 manage_github_tool "Apktool" "iBotPeaches/Apktool" "apktool.jar" "apktool" "2.9.2"
 
                 # 4. JADX
-                echo -e "\n${C_CYAN}--- [4/5] Menginstal JADX (Stabil) ---${C_NC}"
+                echo -e "\n${C_CYAN}--- [4/5] JADX (Stabil) ---${C_NC}"
                 manage_github_tool "JADX" "skylot/jadx" "jadx" "jadx" "1.5.3"
 
                 # 5. Uber APK Signer
-                echo -e "\n${C_CYAN}--- [5/5] Menginstal Uber APK Signer (Stabil) ---${C_NC}"
+                echo -e "\n${C_CYAN}--- [5/5] Uber APK Signer (Stabil) ---${C_NC}"
                 manage_github_tool "Uber APK Signer" "patrickfav/uber-apk-signer" "uber-apk-signer.jar" "uber-apk-signer" "1.3.0"
 
-                echo -e "\n${C_GREEN}🔥 INSTALASI WAJIB LENGKAP! Silakan cek kembali status di menu utama.${C_NC}"
+                echo -e "\n${C_GREEN}🔥 INSTALASI WAJIB LENGKAP! Cek status di menu utama.${C_NC}"
                 ;;
             [Qq]) echo -e "\n${C_BLUE}Terima kasih telah menggunakan Maww-Toolkit! 👋${C_NC}"; exit 0 ;;
-            *) echo -e "\n${C_RED}❌ Pilihan tidak valid, Cek lagi deh!${C_NC}" ;;
+            *) echo -e "\n${C_RED}❌ Pilihan tidak valid.${C_NC}" ;;
         esac
     fi
     echo -e "\n${C_YELLOW}Tekan [Enter] buat lanjut...${C_NC}"; read -r
