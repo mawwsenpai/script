@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#                 MAWW SCRIPT V13 - FINAL COMPLETE EDITION
+#                 MAWW SCRIPT V14 - STABLE & POLISHED
 # ==============================================================================
 # Deskripsi:
-#   Versi final yang menggabungkan semua fitur: menu estetik, setup otomatis
-#   dengan fallback manual, arsitektur konfigurasi yang bersih, dan semua
-#   helper script dibuat secara dinamis.
+#   Versi stabil yang menggabungkan semua perbaikan: menu estetik, setup
+#   otomatis cerdas dengan fallback, arsitektur konfigurasi yang bersih,
+#   dan penanganan error yang lebih baik.
 #
 # Dibuat oleh: Maww Senpai (dengan bantuan Gemini)
-# Versi: 13.0
+# Versi: 14.0
 # ==============================================================================
 
 # --- [ KONFIGURASI GLOBAL & FILE ] ---
@@ -73,7 +73,7 @@ EOF
 
 function _generate_handle_token_py() {
 cat << EOF > "$PY_HELPER_TOKEN"
-import sys, json, os
+import sys, os
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 if len(sys.argv) < 2:
@@ -99,7 +99,7 @@ try:
     
     print(f"SUKSES: File '{token_file}' berhasil dibuat.")
 except Exception as e:
-    print(f"ERROR: Gagal menukar kode dengan token. Detail: {e}")
+    print(f"ERROR: Gagal menukar kode dengan token. Pastikan kode valid. Detail: {e}")
     sys.exit(1)
 EOF
 }
@@ -221,7 +221,6 @@ function setup() {
     stop >/dev/null 2>&1 || true
     rm -f "$G_TOKEN_FILE" "auth_code.tmp"
     
-    # --- Kumpulkan Info User (device.conf) ---
     if [ ! -f "$CONFIG_DEVICE" ]; then
         _log_info "Konfigurasi perangkat tidak ditemukan. Membuat baru..."
         read -p "   - Masukkan Alamat Email Gmail Anda : " email_input
@@ -233,7 +232,6 @@ function setup() {
         _log_ok "   -> Menggunakan konfigurasi perangkat yang ada."
     fi
     
-    # --- Siapkan Kredensial & Konfigurasi (credentials.json & config.json) ---
     _log_info "Memeriksa file kredensial dan konfigurasi..."
     if [ ! -f "$G_CREDS_FILE" ]; then
         if [ -f "$DOWNLOAD_DIR/$G_CREDS_FILE" ]; then
@@ -245,7 +243,6 @@ function setup() {
         fi
     fi
 
-    # [PENINGKATAN] Otomatis buat config.json jika belum ada
     if [ ! -f "$CONFIG_FILE" ]; then
         _log_warn "   -> '$CONFIG_FILE' tidak ditemukan. Membuat secara otomatis..."
         local client_id_from_creds=$(grep -o '"client_id": *"[^"]*"' "$G_CREDS_FILE" | grep -o '"[^"]*"$' | tr -d '"')
@@ -255,15 +252,13 @@ function setup() {
         _log_ok "   -> '$CONFIG_FILE' berhasil dibuat dari '$G_CREDS_FILE'."
     fi
 
-    # --- Proses Otentikasi Otomatis dengan Fallback ---
     _log_info "Membuat helper script..."
     _generate_local_server_py
     _generate_handle_token_py
 
-    # [PERBAIKAN] Baca Client ID HANYA dari config.json
     local client_id=$(grep -o '"CLIENT_ID": *"[^"]*"' "$CONFIG_FILE" | grep -o '"[^"]*"$' | tr -d '"')
     if [ -z "$client_id" ]; then
-        _log_error "GAGAL: CLIENT_ID tidak ditemukan di $CONFIG_FILE."
+        _log_error "GAGAL: CLIENT_ID kosong atau tidak ditemukan di $CONFIG_FILE."
         return 1
     fi
     _log_ok "   -> Client ID berhasil dibaca dari $CONFIG_FILE."
@@ -288,19 +283,23 @@ function setup() {
     else
         kill $server_pid 2>/dev/null || true
         _log_error "Mode otomatis gagal atau timeout."
-        _log_warn "Silakan otorisasi secara manual."
-        python -m webbrowser -t "$auth_url"
-        read -p "   - Salin kode dari browser dan paste di sini: " manual_code
+        _log_warn "================= MODE MANUAL ================="
+        _log_warn "1. Buka browser dan login ke akun Google Anda."
+        _log_warn "2. Setelah memberi izin, Anda akan di-redirect ke"
+        _log_warn "   halaman 'localhost' yang mungkin error. ITU NORMAL."
+        _log_warn "3. Salin URL LENGKAP dari address bar browser."
+        _log_warn "4. Kode ada di URL itu setelah 'code=4%2F...&'"
+        _log_warn "============================================="
+        read -p "   - Paste kode di sini: " manual_code
         python "$PY_HELPER_TOKEN" "$manual_code"
     fi
 
     if [ -f "$G_TOKEN_FILE" ]; then
         _log_ok "🎉 SETUP SELESAI! Otorisasi berhasil."
     else
-        _log_error "SETUP GAGAL. Token tidak berhasil dibuat."
+        _log_error "SETUP GAGAL. Token tidak berhasil dibuat. Cek kembali kodemu."
     fi
 }
-
 
 function start() {
     clear; display_header
@@ -359,7 +358,7 @@ function cleanup() {
         _log_info "Menghapus file..."
         rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$CONFIG_FILE" \
               "$PY_HELPER_TOKEN" "$PY_LISTENER" "$PY_LOCAL_SERVER" \
-              "$PID_FILE" "$LOG_FILE" "auth_code.tmp"
+              "$PID_FILE" "$LOG_FILE" "auth_code.tmp" "$PATCH_FLAG"
         _log_ok "Pembersihan selesai."
     else
         _log_info "Pembersihan dibatalkan."
@@ -377,25 +376,38 @@ function run_patcher() {
         "google-auth-oauthlib==1.2.0" 
     )
     
-    _log_info "LANGKAH 1/3: Menginstal paket sistem Termux..."
+    _log_info "LANGKAH 1/3: Memeriksa paket sistem Termux..."
     pkg update -y >/dev/null 2>&1
-    pkg install -y "${TERMUX_PACKAGES[@]}" || { _log_error "Gagal menginstal paket sistem."; exit 1; }
-    _log_ok "   -> Paket sistem berhasil dikonfigurasi."
+    for pkg in "${TERMUX_PACKAGES[@]}"; do
+        if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+            _log_warn "   -> Menginstal '$pkg'..."
+            pkg install -y "$pkg" || { _log_error "Gagal menginstal $pkg."; exit 1; }
+        fi
+    done
+    _log_ok "   -> Semua paket sistem sudah siap."
 
-    _log_info "LANGKAH 2/3: Menginstal library Python..."
-    pip install --no-cache-dir --force-reinstall "${PYTHON_REQUIREMENTS[@]}" || { _log_error "Gagal menginstal library Python."; exit 1; }
-    _log_ok "   -> Semua library Python berhasil diinstal."
+    _log_info "LANGKAH 2/3: Memeriksa library Python..."
+    for req in "${PYTHON_REQUIREMENTS[@]}"; do
+        local pkg_name=$(echo "$req" | cut -d'=' -f1)
+        if ! pip show "$pkg_name" >/dev/null 2>&1; then
+            _log_warn "   -> Menginstal '$pkg_name'..."
+            pip install --no-cache-dir "$req" || { _log_error "Gagal menginstal $req."; exit 1; }
+        fi
+    done
+    _log_ok "   -> Semua library Python sudah siap."
 
     _log_info "LANGKAH 3/3: Mengonfigurasi izin penyimpanan..."
     if [ ! -d "$HOME/storage/shared" ]; then
         termux-setup-storage
+        _log_warn "   -> Izin penyimpanan diminta. Mohon setujui lalu tunggu 5 detik..."
         sleep 5 
     fi
     _log_ok "   -> Izin penyimpanan siap."
     
     echo
-    _log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅"
+    _log_info "Membuat file penanda penyelesaian..."
     touch "$PATCH_FLAG_FILE"
+    _log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅"
 }
 
 # ==============================================================================
@@ -405,7 +417,7 @@ function run_patcher() {
 function display_header() {
     echo -e "${C_PURPLE}"
     echo '  ╭──────────────────────────────────────────────────╮'
-    echo -e "  │ ${C_BG_PURPLE}${C_WHITE}    ⓂⒶⓌⓌ - ⓈⒸⓇⒾⓅⓉ  v13 (Final)         ${C_RESET}${C_PURPLE} │"
+    echo -e "  │ ${C_BG_PURPLE}${C_WHITE}    ⓂⒶⓌⓌ - ⓈⒸⓇⒾⓅⓉ  v14 (Stable)        ${C_RESET}${C_PURPLE} │"
     echo '  ├──────────────────────────────────────────────────┤'
     local status_text; local status_color
     if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then
@@ -456,12 +468,12 @@ function display_menu() {
 
 function main() {
     if [ ! -f "$PATCH_FLAG_FILE" ]; then
-        clear; display_header
-        _log_warn "Ini adalah eksekusi pertama kali."
-        _log_info "Skrip akan menyiapkan lingkungan Anda secara otomatis."
-        read -p "   Tekan [Enter] untuk memulai..."
+        clear
+        display_header
+        _log_warn "Selamat datang! Ini adalah eksekusi pertama."
+        _log_info "Skrip akan menyiapkan lingkungan Anda..."
+        read -p "   Tekan [Enter] untuk memulai persiapan..."
         run_patcher
-        _log_ok "Persiapan lingkungan selesai!"
         read -p "   Tekan [Enter] untuk melanjutkan ke menu utama..."
     fi
 
