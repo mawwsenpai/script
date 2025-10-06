@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#                 MAWW SCRIPT V41 - SECURITY ACTIONS EDITION
+#                 MAWW SCRIPT V42 - FUNGSI LAMA, API BERSIH
 # ==============================================================================
 
 set -o pipefail
@@ -61,12 +61,13 @@ with socketserver.TCPServer(("", PORT), MyRequestHandler) as server:
     server.serve_forever()
 EOF
 
+# Scope diperbaiki: Hanya Gmail
 cat << EOF > "$PY_HELPER_TOKEN"
 import sys,os;from google_auth_oauthlib.flow import Flow
 if len(sys.argv)<2:print("Penggunaan: python handle_token.py <auth_code>",file=sys.stderr);sys.exit(1)
 auth_code=sys.argv[1];creds_file="$G_CREDS_FILE";token_file="$G_TOKEN_FILE"
-# SCOPES BARU: Gmail (untuk listener) + Admin Directory (untuk info device) + Identity Toolkit (untuk cabut sesi)
-scopes=['https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/admin.directory.device.readonly', 'https://www.googleapis.com/auth/identitytoolkit']
+# SCOPES SENSITIF DIHAPUS, HANYA GMAIL YANG DIPERLUKAN UNTUK LISTENER
+scopes=['https://www.googleapis.com/auth/gmail.modify']
 redirect_uri="$REDIRECT_URI"
 if not os.path.exists(creds_file):print(f"FATAL: File '{creds_file}' tidak ditemukan!",file=sys.stderr);sys.exit(1)
 try:
@@ -76,87 +77,75 @@ try:
 except Exception as e:print(f"ERROR: Gagal menukar kode. Pastikan URI di Google Console benar. Detail: {e}",file=sys.stderr);sys.exit(1)
 EOF
 
+# Listener dikembalikan ke fungsionalitas Termux-API
 cat << EOF > "$PY_LISTENER"
 import os,sys,subprocess,logging,base64,time,json;from google.oauth2.credentials import Credentials;from googleapiclient.discovery import build;from google.auth.transport.requests import Request;from email.mime.multipart import MIMEMultipart;from email.mime.text import MIMEText;from email.mime.base import MIMEBase;from email import encoders
-# SCOPES BARU
-SCOPES=['https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/admin.directory.device.readonly', 'https://www.googleapis.com/auth/identitytoolkit'];
+# SCOPES KEMBALI HANYA GMAIL
+SCOPES=['https://www.googleapis.com/auth/gmail.modify'];
 TOKEN_FILE='$G_TOKEN_FILE';MY_EMAIL='$MY_EMAIL';CMD_SUBJECT='$CMD_SUBJECT';LOG_FILE='$LOG_FILE';POLL_INTERVAL=180
 logging.basicConfig(level=logging.INFO,filename=LOG_FILE,filemode='a',format='%(asctime)s - %(message)s')
-
-def get_admin_user():
-    return MY_EMAIL
-
 def send_reply(service,original_message,body_text,attachment_path=None):
     try:
         headers=original_message['payload']['headers'];to_email=next(h['value'] for h in headers if h['name'].lower()=='from');subject="Re: "+next(h['value'] for h in headers if h['name'].lower()=='subject');message=MIMEMultipart();message['to']=to_email;message['subject']=subject;message.attach(MIMEText(body_text,'plain'))
         if attachment_path and os.path.exists(attachment_path):
+            if os.path.getsize(attachment_path) > 5242880:
+                body_text += "\n\n[WARNING] File terlalu besar (>5MB), mungkin gagal terkirim sebagai attachment."
             with open(attachment_path,'rb') as f:part=MIMEBase('application','octet-stream');part.set_payload(f.read())
             encoders.encode_base_64(part);part.add_header('Content-Disposition',f'attachment; filename="{os.path.basename(attachment_path)}"');message.attach(part)
         raw_message=base64.urlsafe_b64encode(message.as_bytes()).decode();service.users().messages().send(userId='me',body={'raw':raw_message}).execute();logging.info(f"Berhasil mengirim balasan ke {to_email}")
     except Exception as e:logging.error(f"Gagal mengirim balasan: {e}")
-
-def execute_command(gmail_service, admin_service, identity_service, msg_obj, full_command):
+def execute_command(service,msg_obj,full_command):
     try:
-        command=full_command.split(':')[1].strip().lower();logging.info(f"Mengeksekusi perintah Admin: '{command}'");output_file,reply_body=None,""
-        admin_user = get_admin_user()
+        # 1. Ambil info perangkat untuk identifikasi balasan
+        result_info = subprocess.run(["termux-device-info"], capture_output=True, text=True, timeout=5)
+        device_data = json.loads(result_info.stdout)
+        device_model = device_data.get('manufacturer', 'Unknown') + ' ' + device_data.get('model', 'Device')
         
-        if command=='list-devices':
-            reply_body = "📱 Daftar Perangkat Terdaftar (Admin SDK):\n\n"
+        command=full_command.split(':')[1].strip().lower();logging.info(f"Mengeksekusi perintah: '{command}'");output_file,reply_body=None,f"Perintah '{command}' telah selesai dieksekusi."
+        
+        if command=='ss':
+            output_file,reply_body=os.path.expanduser("~/screenshot.png"),f"[ID: {device_model}] Screenshot layar perangkat terlampir! 📸"
+            subprocess.run(["termux-screenshot",output_file],timeout=20,check=True)
+        elif command=='foto-depan':
+            output_file,reply_body=os.path.expanduser("~/foto_depan.jpg"),f"[ID: {device_model}] Foto dari kamera DEPAN terlampir! 🤳"
+            subprocess.run(["termux-camera-photo","-c","1",output_file],timeout=25,check=True)
+        elif command=='lokasi':
+            result=subprocess.run(["termux-location"],capture_output=True,text=True,timeout=30,check=True)
+            reply_body=f"[ID: {device_model}] 🛰️ Hasil perintah 'lokasi' saat ini:\n\n{result.stdout or '❌ GPS gagal diakses. Cek izin Termux-API.'}"
+        elif command=='info':
+            result=subprocess.run(["termux-device-info"],capture_output=True,text=True,timeout=15,check=True)
+            reply_body=f"[ID: {device_model}] 📱 Info Perangkat:\n\n{result.stdout or '❌ Info perangkat gagal didapat.'}"
+        elif command=='batterylevel':
+            result=subprocess.run(["termux-battery-status"],capture_output=True,text=True,timeout=10,check=True)
             try:
-                # Menarik daftar perangkat (Admin SDK Device Management API)
-                results = admin_service.mobiledevices().list(customerId='my_customer', maxResults=10).execute()
-                devices = results.get('mobiledevices', [])
-                if devices:
-                    for i, device in enumerate(devices):
-                        device_id = device.get('resourceId', 'N/A')
-                        device_model = device.get('model', 'N/A')
-                        device_type = device.get('type', 'N/A')
-                        last_sync = device.get('lastSync', 'N/A')
-                        
-                        reply_body += f"[{i+1}] ID: {device_id}\n"
-                        reply_body += f"    Model: {device_model} ({device_type})\n"
-                        reply_body += f"    Sync Terakhir: {last_sync.split('T')[0]}\n"
-                else:
-                    reply_body += "Tidak ada perangkat terdaftar yang ditemukan, atau akun bukan Admin Workspace."
-            except Exception as e:
-                reply_body = f"❌ GAGAL AKSES ADMIN SDK. Pastikan Anda Super Admin Workspace. Error: {e}"
-
-        elif command=='revoke-token':
-            # Tindakan Nyata: Mencabut semua token akses untuk user ini.
-            # Ini akan memaksa semua sesi (termasuk listener ini!) untuk logout.
-            reply_body = "🔒 TINDAKAN KEAMANAN: Mencoba mencabut semua Token Akses...\n"
-            try:
-                # Menggunakan Identity Toolkit API untuk mencabut token.
-                # Perlu diingat: Identity Toolkit API adalah layanan berbayar.
-                identity_service.users().delete(localId=admin_user).execute() 
-                reply_body += "✅ SUKSES MENCABUT SEMUA TOKEN! Semua sesi (termasuk listener ini) akan logout. Silakan jalankan Setup (3) ulang."
-            except Exception as e:
-                reply_body = f"❌ GAGAL MENCABUT TOKEN. Cek izin dan API Key Identity Toolkit. Detail: {e}"
-            
+                battery_data = json.loads(result.stdout)
+                reply_body = f"[ID: {device_model}] 🔋 Level Baterai Saat Ini: {battery_data.get('percentage', 'N/A')}%"
+            except:
+                reply_body = f"[ID: {device_model}] 🔋 Info Baterai Gagal Di-parse:\n\n{result.stdout or 'Tidak ada output.'}"
+        elif command=='clipboard':
+            result=subprocess.run(["termux-clipboard-get"],capture_output=True,text=True,timeout=10,check=True)
+            reply_body=f"[ID: {device_model}] 📋 Isi Clipboard:\n\n{result.stdout or 'Clipboard kosong atau gagal diakses.'}"
         elif command=='help':
-            reply_body="Daftar Perintah Keamanan (Wajib Akun Google Workspace):\n\n"
-            reply_body+="Maww:list-devices -> Lihat daftar HP yang terdaftar di akun Workspace kamu.\n"
-            reply_body+="Maww:revoke-token -> **MENCABUT SEMUA TOKEN** (Memaksa logout dari semua sesi di semua HP).\n"
-            reply_body+="Maww:exit-listener -> Berhenti mendengarkan perintah."
-            
+            reply_body=f"[ID: {device_model}] Daftar Perintah (Gunakan format: Maww:<perintah>):\n\n"
+            reply_body+="ss            -> Ambil Screenshot.\n"
+            reply_body+="foto-depan    -> Ambil foto dari kamera depan.\n"
+            reply_body+="lokasi        -> Dapatkan koordinat GPS.\n"
+            reply_body+="info          -> Dapatkan info perangkat (misalnya model, OS).\n"
+            reply_body+="exit-listener -> Berhenti mendengarkan perintah."
         elif command=='exit-listener':
-            reply_body="Perintah 'exit-listener' diterima. Listener akan berhenti. Bye-bye! 👋"
-            send_reply(gmail_service, msg_obj, reply_body); logging.info("Listener dihentikan."); sys.exit(0)
-            
+            reply_body=f"[ID: {device_model}] Perintah 'exit-listener' diterima. Listener akan berhenti. Bye-bye! 👋"
+            send_reply(service, msg_obj, reply_body); logging.info("Listener dihentikan."); sys.exit(0)
         else:
-            reply_body=f"Perintah Admin '{command}' tidak dikenali. Ketik 'Maww:help' untuk daftar perintah."
-        
-        send_reply(gmail_service, msg_obj, reply_body, output_file)
+            reply_body=f"[ID: {device_model}] Perintah '{command}' tidak dikenali. Ketik 'Maww:help' untuk daftar perintah."
+        send_reply(service, msg_obj, reply_body, output_file)
+    except subprocess.CalledProcessError as cpe:
+        error_msg = f"GAGAL EKSEKUSI (Code: {cpe.returncode}): Perintah Termux-API bermasalah atau izin kurang. Output: {cpe.stderr.strip() or 'Tidak ada detail error.'}"
+        logging.error(error_msg);send_reply(service, msg_obj, f"[ID: {device_model}] GAGAL: {error_msg}")
     except Exception as e:
-        logging.error(f"Error saat eksekusi: {e}"); send_reply(gmail_service, msg_obj, f"GAGAL: Terjadi error. Cek log. Detail: {e}")
-
+        logging.error(f"Error saat eksekusi: {e}");send_reply(service, msg_obj, f"[ID: {device_model}] GAGAL: Terjadi error. Cek log. Detail: {e}")
 def main_loop():
     creds=Credentials.from_authorized_user_file(TOKEN_FILE,SCOPES)
     gmail_service=build('gmail','v1',credentials=creds)
-    # Gunakan build Admin SDK Directory API
-    admin_service = build('admin', 'directory_v1', credentials=creds)
-    # Gunakan build Identity Toolkit API (Perlu konfigurasi terpisah)
-    identity_service = build('identitytoolkit', 'v3', credentials=creds) 
     
     logging.info("Listener service dimulai."); print("Listener kini berjalan di background...")
     while True:
@@ -168,7 +157,7 @@ def main_loop():
             q=f"from:{MY_EMAIL} is:unread subject:'{CMD_SUBJECT}'";results=gmail_service.users().messages().list(userId='me',labelIds=['INBOX'],q=q).execute();messages=results.get('messages',[])
             for message_info in messages:
                 msg_id=message_info['id'];msg_obj=gmail_service.users().messages().get(userId='me',id=msg_id).execute()
-                if msg_obj:execute_command(gmail_service, admin_service, identity_service, msg_obj, msg_obj['snippet'])
+                if msg_obj:execute_command(gmail_service, msg_obj, msg_obj['snippet'])
                 gmail_service.users().messages().modify(userId='me',id=msg_id,body={'removeLabelIds':['UNREAD']}).execute()
             time.sleep(POLL_INTERVAL)
         except Exception as e:logging.error(f"Error pada loop utama: {e}");time.sleep(POLL_INTERVAL*2)
@@ -178,13 +167,12 @@ EOF
 
 function setup() {
     clear; display_header
-    _log_header "Setup / Konfigurasi Ulang (Admin Mode)"
+    _log_header "Setup / Konfigurasi Ulang"
     rm -f "$G_TOKEN_FILE" "$SERVER_PID_FILE" "$AUTH_CODE_FILE"
 
     if [ ! -f "$CONFIG_DEVICE" ]; then
         _log_info "Membuat file konfigurasi baru..."
-        _log_warn "Pastikan email Anda adalah akun Google Workspace (Bukan @gmail.com)."
-        read -r -p "$(echo -e "${C_CYAN}> Masukkan Alamat Email Gmail/Workspace Anda: ${C_RESET}")" email_input
+        read -r -p "$(echo -e "${C_CYAN}> Masukkan Alamat Email Gmail Anda: ${C_RESET}")" email_input
         read -r -p "$(echo -e "${C_CYAN}> Masukkan Subjek Perintah Rahasia: ${C_RESET}")" subject_input
         echo "MY_EMAIL=\"$email_input\"" > "$CONFIG_DEVICE"
         echo "CMD_SUBJECT=\"$subject_input\"" >> "$CONFIG_DEVICE"
@@ -207,8 +195,8 @@ function setup() {
     local client_id; client_id=$(grep -o '"client_id": *"[^"]*"' "$G_CREDS_FILE" | grep -o '"[^"]*"$' | tr -d '"')
     if [ -z "$client_id" ]; then _log_error "GAGAL: Tidak bisa membaca client_id dari '$G_CREDS_FILE'."; return; fi
     
-    # Scope yang diperluas
-    local scope="https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/admin.directory.device.readonly https://www.googleapis.com/auth/identitytoolkit"
+    # Scope yang bersih
+    local scope="https://www.googleapis.com/auth/gmail.modify"
     local auth_url="https://accounts.google.com/o/oauth2/v2/auth?scope=${scope}&access_type=offline&response_type=code&prompt=select_account&redirect_uri=${REDIRECT_URI}&client_id=${client_id}"
 
     _log_header "INSTRUKSI OTENTIKASI"
@@ -220,7 +208,7 @@ function setup() {
     _log_ok "Server berjalan! (PID: $(cat "$SERVER_PID_FILE"))"
     _log_warn "Langkah 1: COPY dan BUKA URL di bawah ini di browser."
     echo -e "${C_BOLD}${C_YELLOW}    ${auth_url}${C_RESET}"
-    _log_warn "Langkah 2: Selesaikan login & berikan izin (Anda mungkin perlu login sebagai Super Admin)."
+    _log_warn "Langkah 2: Selesaikan login & berikan izin."
     _log_warn "Langkah 3: Halaman browser akan menampilkan 'Kode diterima'."
     _log_info "Script ini menunggu kode otorisasi dari server..."
 
@@ -250,31 +238,35 @@ function setup() {
     rm -f "$AUTH_CODE_FILE" "$SERVER_PID_FILE"
 }
 
-function start() { clear;display_header;_log_header "Memulai Listener Admin"; if [ ! -f "$CONFIG_DEVICE" ]||[ ! -f "$G_TOKEN_FILE" ];then _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup' (3) dulu.";return;fi;if [ -f "$PID_FILE" ]&&ps -p "$(cat "$PID_FILE")" >/dev/null;then _log_warn "Listener sudah berjalan.";return;fi;_generate_py_scripts;nohup python "$PY_LISTENER" >/dev/null 2>&1 & echo $! > "$PID_FILE";_log_ok "Listener dimulai (PID: $(cat "$PID_FILE")). Cek log di '$LOG_FILE'." ;}
+function start() { clear;display_header;_log_header "Memulai Listener"; if [ ! -f "$CONFIG_DEVICE" ]||[ ! -f "$G_TOKEN_FILE" ];then _log_error "Konfigurasi/token tidak ditemukan. Jalankan 'Setup' (3) dulu.";return;fi;if [ -f "$PID_FILE" ]&&ps -p "$(cat "$PID_FILE")" >/dev/null;then _log_warn "Listener sudah berjalan.";return;fi;_generate_py_scripts;nohup python "$PY_LISTENER" >/dev/null 2>&1 & echo $! > "$PID_FILE";_log_ok "Listener dimulai (PID: $(cat "$PID_FILE")). Cek log di '$LOG_FILE'." ;}
 function stop() { clear;display_header;_log_header "Menghentikan Listener"; if [ ! -f "$PID_FILE" ];then _log_warn "Listener tidak sedang berjalan.";return;fi;local pid; pid=$(cat "$PID_FILE");if ps -p "$pid" >/dev/null;then kill "$pid";rm -f "$PID_FILE";_log_ok "Listener (PID: $pid) telah dihentikan.";else _log_warn "Proses (PID: $pid) tidak ditemukan. File PID dihapus.";rm -f "$PID_FILE";fi;}
 function logs() { clear;display_header;_log_header "Melihat Log Realtime";if [ ! -f "$LOG_FILE" ];then _log_warn "File log belum ada.";return;fi;_log_info "Menampilkan log... Tekan ${C_BOLD}Ctrl+C${C_RESET} untuk keluar."; echo; tail -f "$LOG_FILE" ;}
 function cleanup() { clear;display_header;_log_header "Pembersihan Total";_log_warn "Ini akan menghapus SEMUA file terkait script ini.";
     read -r -p "$(echo -e "${C_YELLOW}> Anda yakin ingin melanjutkan? (y/n): ${C_RESET}")" confirm
     if [[ "$confirm" =~ ^[Yy]$ ]];then stop >/dev/null 2>&1||true;_log_info "Menghapus file...";rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$PY_HELPER_TOKEN" "$PY_LISTENER" ".patch_installed" "$LOG_FILE" "$PID_FILE" "$SERVER_PID_FILE" "$PY_LOCAL_SERVER" "$AUTH_CODE_FILE";_log_ok "Pembersihan selesai.";else _log_info "Pembersihan dibatalkan.";fi;}
 function run_patcher() { set -e;clear;display_header;_log_header "Persiapan Lingkungan Otomatis";
-    readonly PKS=("python" "coreutils" "curl");
-    readonly PYR=("google-api-python-client" "google-auth-httplib2" "google-auth-oauthlib");_log_info "${C_BOLD}Langkah 1/3:${C_RESET} Memeriksa paket sistem...";pkg update -y >/dev/null 2>&1;for p in "${PKS[@]}";do if ! dpkg -s "$p">/dev/null 2>&1;then _log_warn "Menginstal '$p'...";pkg install -y "$p";fi;done;_log_ok "Paket sistem siap.";_log_info "${C_BOLD}Langkah 2/3:${C_RESET} Memeriksa library Python...";for r in "${PYR[@]}";do if ! pip show "$r">/dev/null 2>&1;then _log_warn "Menginstal '$r'...";pip install --no-cache-dir "$r";fi;done;_log_ok "Library Python siap.";_log_info "${C_BOLD}Langkah 3/3:${C_RESET} Izin penyimpanan...";if [ ! -d "$HOME/storage/shared" ];then termux-setup-storage;_log_warn "Izin diminta...";sleep 5;fi;_log_ok "Izin penyimpanan siap.";echo;_log_ok "✅ LINGKUNGAN SUDAH SIAP! (Hanya butuh CURL dan Python) ✅";set +e;}
+    readonly PKS=("python" "termux-api" "coreutils" "curl");
+    readonly PYR=("google-api-python-client" "google-auth-httplib2" "google-auth-oauthlib");_log_info "${C_BOLD}Langkah 1/3:${C_RESET} Memeriksa paket sistem...";pkg update -y >/dev/null 2>&1;for p in "${PKS[@]}";do if ! dpkg -s "$p">/dev/null 2>&1;then _log_warn "Menginstal '$p'...";pkg install -y "$p";fi;done;_log_ok "Paket sistem siap.";_log_info "${C_BOLD}Langkah 2/3:${C_RESET} Memeriksa library Python...";for r in "${PYR[@]}";do if ! pip show "$r">/dev/null 2>&1;then _log_warn "Menginstal '$r'...";pip install --no-cache-dir "$r";fi;done;_log_ok "Library Python siap.";_log_info "${C_BOLD}Langkah 3/3:${C_RESET} Izin penyimpanan...";if [ ! -d "$HOME/storage/shared" ];then termux-setup-storage;_log_warn "Izin diminta...";sleep 5;fi;_log_ok "Izin penyimpanan siap.";echo;_log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅";set +e;}
 
 function device_commands_menu() {
     clear; display_header
-    _log_header "MENU KEAMANAN AKUN (Admin SDK)"
+    _log_header "MENU ANTI-MALING (Wajib Termux-API)"
     if [ ! -f "$CONFIG_DEVICE" ]; then _log_error "Konfigurasi belum ditemukan! Jalankan Setup (3) dulu."; return; fi
     source "$CONFIG_DEVICE"
-    _log_warn "PERHATIAN: Hanya berfungsi 100% jika email Anda adalah ${C_CYAN}Akun Google Workspace (Bisnis/Edukasi)${C_RESET}."
+    _log_warn "${C_BOLD}PERHATIAN:${C_RESET} HP target HARUS menginstal app ${C_CYAN}Termux:API${C_RESET} dan listener aktif."
+    _log_warn "Perintah Email harus selalu diawali ${C_BOLD}Maww:${C_RESET} Contoh: ${C_YELLOW}Maww:lokasi${C_RESET}"
     _log_info "Kirim email ke ${C_CYAN}\"$MY_EMAIL\"${C_RESET} dengan Subjek: ${C_YELLOW}\"$CMD_SUBJECT\"${C_RESET}"
     echo
-    echo -e "${C_BOLD}TINDAKAN KEAMANAN AKTIF:${C_RESET}"
-    echo -e "${C_WHITE}  1) Lihat Perangkat Aktif (list-devices) -> Melihat HP yang terdaftar di akun Workspace."
-    echo -e "${C_WHITE}  2) Cabut Semua Token Akses (revoke-token) -> **LOGOUT PAKSA SEMUA SESI!** (Termasuk listener ini)."
+    echo -e "${C_BOLD}FUNGSI MENCARI ORANG (Termux-API Required):${C_RESET}"
+    echo -e "${C_WHITE}  1) Dapatkan Lokasi GPS    -> Perintah: ${C_CYAN}lokasi${C_RESET}"
+    echo -e "${C_WHITE}  2) Ambil Foto Depan       -> Perintah: ${C_CYAN}foto-depan${C_RESET} (Lihat wajah si pengambil)"
+    echo -e "${C_WHITE}  3) Ambil Screenshot       -> Perintah: ${C_CYAN}ss${C_RESET} (Lihat yang lagi dibuka)"
     echo
-    echo -e "${C_BOLD}ADMINISTRASI LISTENER:${C_RESET}"
-    echo -e "${C_WHITE}  3) Dapatkan Bantuan (help)             -> Daftar perintah."
-    echo -e "${C_WHITE}  4) Matikan Listener (exit-listener)    -> Matikan listener."
+    echo -e "${C_BOLD}FUNGSI INFO TAMBAHAN:${C_RESET}"
+    echo -e "${C_WHITE}  4) Info Detail Perangkat  -> Perintah: ${C_CYAN}info${C_RESET}"
+    echo -e "${C_WHITE}  5) Cek Level Baterai      -> Perintah: ${C_CYAN}batterylevel${C_RESET}"
+    echo -e "${C_WHITE}  6) Lihat Clipboard        -> Perintah: ${C_CYAN}clipboard${C_RESET}"
+    echo -e "${C_WHITE}  7) Matikan Listener Remote-> Perintah: ${C_CYAN}exit-listener${C_RESET}"
     echo
     read -r -p "$(echo -e "${C_CYAN}Tekan [Enter] untuk kembali ke Menu Utama... ${C_RESET}")"
 }
@@ -288,16 +280,16 @@ function display_header() {
         status_text="TIDAK AKTIF"; status_color="$C_RED"
     fi
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
-    echo -e "${C_BOLD}${C_WHITE}   Ⓜ Ⓐ Ⓦ Ⓦ    Ⓢ Ⓒ Ⓡ Ⓘ Ⓟ Ⓣ   v41 (Admin SDK)${C_RESET}"
+    echo -e "${C_BOLD}${C_WHITE}   Ⓜ Ⓐ Ⓦ Ⓦ    Ⓢ Ⓒ Ⓡ Ⓘ Ⓟ Ⓣ   v42 (Clean API)${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
     printf "%-10s %-20s %s\n" " Status" ": ${status_color}${status_text}${C_RESET}" "${C_YELLOW}${pid_text}${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
 }
 
 function display_menu() {
-    local device_menu_option="  7) 🌐  Perintah Remote (Admin SDK)"
+    local device_menu_option="  7) 📱  Perintah Remote (Termux-API)"
     if [ ! -f "$CONFIG_DEVICE" ]; then
-        device_menu_option="${C_DIM}  7) 🌐  Perintah Remote (Harus Setup dulu!)${C_RESET}"
+        device_menu_option="${C_DIM}  7) 📱  Perintah Remote (Harus Setup dulu!)${C_RESET}"
     fi
 
     echo
