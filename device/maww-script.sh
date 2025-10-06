@@ -88,13 +88,13 @@ EOF
 }
 
 # --- LOGIKA INTI (dengan UI stabil & Arsitektur Baru) ---
+# GANTI SEMUA FUNGSI SETUP LAMA DENGAN YANG INI
 function setup() {
     clear; display_header
-    _log_header "Setup / Konfigurasi Ulang"
+    _log_header "Setup / Konfigurasi Ulang (Mode Debug)"
     rm -f "$G_TOKEN_FILE"
     if [ ! -f "$CONFIG_DEVICE" ]; then
         _log_info "Membuat file '$CONFIG_DEVICE' baru..."
-        # [BUG FIX] Menggunakan read standar yang stabil
         read -r -p "$(echo -e "${C_CYAN}> Masukkan Alamat Email Gmail Anda: ${C_RESET}")" email_input
         read -r -p "$(echo -e "${C_CYAN}> Masukkan Subjek Perintah Rahasia: ${C_RESET}")" subject_input
         echo "MY_EMAIL=\"$email_input\"" > "$CONFIG_DEVICE"
@@ -103,7 +103,7 @@ function setup() {
     fi
     source "$CONFIG_DEVICE"
 
-    _log_info "Memeriksa file kredensial '$G_CREDS_FILE'..."
+    _log_info "Memeriksa file kredensial 'credentials.json'..."
     if [ ! -f "$G_CREDS_FILE" ]; then
         if ! cp "$DOWNLOAD_DIR/$G_CREDS_FILE" .; then
             _log_error "GAGAL: '$G_CREDS_FILE' tidak ada di folder Download."
@@ -112,7 +112,6 @@ function setup() {
         _log_ok "Berhasil disalin dari folder Download."
     fi
 
-    # [FITUR BARU] Mengunduh config.json dari URL
     _log_info "Mengunduh konfigurasi Client ID dari URL..."
     if ! curl -sL -o "$CONFIG_JSON_FILE" "$CONFIG_URL"; then
         _log_error "GAGAL mengunduh config.json. Cek koneksi internet atau URL."
@@ -120,10 +119,17 @@ function setup() {
     fi
     _log_ok "File '$CONFIG_JSON_FILE' berhasil diunduh."
 
+    # --- [MATA-MATA DEBUGGING DIMULAI] ---
+    echo -e "${C_YELLOW}-----------------------------------------------------"
+    echo -e "--- ISI FILE CONFIG.JSON YANG DILIHAT SCRIPT ---"
+    cat "$CONFIG_JSON_FILE"
+    echo -e "\n-----------------------------------------------------${C_RESET}"
+    # --- [MATA-MATA DEBUGGING SELESAI] ---
+
     _log_info "Membaca Client ID dari '$CONFIG_JSON_FILE'..."
     local client_id=$(grep -o '"CLIENT_ID": *"[^"]*"' "$CONFIG_JSON_FILE" | grep -o '"[^"]*"$' | tr -d '"')
     if [ -z "$client_id" ]; then
-        _log_error "GAGAL: Tidak bisa membaca CLIENT_ID dari '$CONFIG_JSON_FILE'."
+        _log_error "GAGAL: Tidak bisa membaca CLIENT_ID dari 'config.json'."
         _log_error "Pastikan format JSON benar dan file sudah diupload ke GitHub."
         return
     fi
@@ -144,10 +150,8 @@ function setup() {
     _log_warn "3. Salin kode yang ditampilkan di halaman itu."
     
     while true; do
-        # [BUG FIX] Menggunakan read standar yang stabil
         read -r -p "$(echo -e "${C_CYAN}> Paste kode di sini (atau 'q' untuk keluar): ${C_RESET}")" manual_code
         if [[ "$manual_code" == "q" ]]; then _log_info "Setup dibatalkan."; return; fi
-        # Memastikan variabel tidak kosong sebelum dieksekusi
         if [ -z "$manual_code" ]; then
             _log_error "Input kosong. Silakan paste kodenya."
             continue
