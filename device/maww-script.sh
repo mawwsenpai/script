@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
-# ==============================================================================
-#                 MAWW SCRIPT V25 - STABILIZED & REFACTORED
-# ==============================================================================
-# Deskripsi:
-#   Versi perbaikan total untuk stabilitas. Menghapus fungsi prompt yang
-#   bermasalah dan mengimplementasikan pengambilan Client ID dari URL eksternal
-#   (config.json) sesuai permintaan untuk arsitektur yang lebih bersih.
-#
-# Dibuat oleh: Maww Senpai (dengan bantuan Gemini)
-# Versi: 25.0
-# ==============================================================================
 
-# --- [ KONFIGURASI GLOBAL & FILE ] ---
 set -o pipefail
 readonly G_CREDS_FILE="credentials.json"
 readonly G_TOKEN_FILE="token.json"
@@ -197,7 +185,7 @@ function display_header() {
         status_text="TIDAK AKTIF"; status_color="$C_RED"
     fi
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
-    echo -e "${C_BOLD}${C_WHITE}   Ⓜ Ⓐ Ⓦ Ⓦ    Ⓢ Ⓒ Ⓡ Ⓘ Ⓟ Ⓣ   v25 (Refactored)${C_RESET}"
+    echo -e "${C_BOLD}${C_WHITE} Maww-Script v25 (Refactored)${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
     printf "%-10s %-20s %s\n" " Status" ": ${status_color}${status_text}${C_RESET}" "${C_YELLOW}${pid_text}${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
