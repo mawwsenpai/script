@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#                 MAWW SCRIPT V14 - STABLE & POLISHED
+#                 MAWW SCRIPT V15 - THE DEFINITE FIX
 # ==============================================================================
 # Deskripsi:
-#   Versi stabil yang menggabungkan semua perbaikan: menu estetik, setup
-#   otomatis cerdas dengan fallback, arsitektur konfigurasi yang bersih,
-#   dan penanganan error yang lebih baik.
+#   Versi super stabil dengan perbaikan kritis untuk masalah loop instalasi.
+#   Logika pembuatan flag dipindahkan ke 'main' untuk keandalan maksimal.
 #
 # Dibuat oleh: Maww Senpai (dengan bantuan Gemini)
-# Versi: 14.0
+# Versi: 15.0
 # ==============================================================================
 
 # --- [ KONFIGURASI GLOBAL & FILE ] ---
@@ -22,7 +21,6 @@ readonly PY_LISTENER="gmail_listener.py"
 readonly CONFIG_DEVICE="device.conf"
 readonly PID_FILE="listener.pid"
 readonly LOG_FILE="listener.log"
-readonly PATCH_FLAG=".patch_installed"
 readonly DOWNLOAD_DIR="$HOME/storage/shared/Download"
 
 # --- [ PALET WARNA & TAMPILAN ] ---
@@ -350,15 +348,15 @@ function logs() {
 
 function cleanup() {
     clear; display_header
-    _log_warn "PERINGATAN: Ini akan menghapus SEMUA file konfigurasi,"
-    _log_warn "token, dan log yang dihasilkan oleh skrip ini."
+    _log_warn "PERINGATAN: Ini akan menghapus SEMUA file yang terkait"
+    _log_warn "dengan skrip ini (konfigurasi, token, log, dll)."
     read -p "   Anda yakin ingin melanjutkan? (y/n): " confirm
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         stop >/dev/null 2>&1 || true
         _log_info "Menghapus file..."
         rm -f "$CONFIG_DEVICE" "$G_TOKEN_FILE" "$G_CREDS_FILE" "$CONFIG_FILE" \
               "$PY_HELPER_TOKEN" "$PY_LISTENER" "$PY_LOCAL_SERVER" \
-              "$PID_FILE" "$LOG_FILE" "auth_code.tmp" "$PATCH_FLAG"
+              "$PID_FILE" "$LOG_FILE" "auth_code.tmp" ".patch_installed"
         _log_ok "Pembersihan selesai."
     else
         _log_info "Pembersihan dibatalkan."
@@ -405,9 +403,8 @@ function run_patcher() {
     _log_ok "   -> Izin penyimpanan siap."
     
     echo
-    _log_info "Membuat file penanda penyelesaian..."
-    touch "$PATCH_FLAG_FILE"
     _log_ok "✅ LINGKUNGAN SUDAH SIAP! ✅"
+    # Perintah 'touch' dipindahkan ke fungsi main() untuk keandalan.
 }
 
 # ==============================================================================
@@ -417,7 +414,7 @@ function run_patcher() {
 function display_header() {
     echo -e "${C_PURPLE}"
     echo '  ╭──────────────────────────────────────────────────╮'
-    echo -e "  │ ${C_BG_PURPLE}${C_WHITE}    ⓂⒶⓌⓌ - ⓈⒸⓇⒾⓅⓉ  v14 (Stable)        ${C_RESET}${C_PURPLE} │"
+    echo -e "  │ ${C_BG_PURPLE}${C_WHITE}    ⓂⒶⓌⓌ - ⓈⒸⓇⒾⓅⓉ  v15 (Definite Fix)    ${C_RESET}${C_PURPLE} │"
     echo '  ├──────────────────────────────────────────────────┤'
     local status_text; local status_color
     if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE")" > /dev/null; then
@@ -458,7 +455,7 @@ function display_menu() {
         '🛑') stop;;
         '⚙️') setup;;
         '📜') logs;;
-        '🔧') run_patcher;;
+        '🔧') run_patcher; touch .patch_installed ;; # Jika perbaikan manual, langsung buat flag
         '🗑️') cleanup;;
         '🚪') echo -e "\n${C_PURPLE}Sampai jumpa lagi, Senpai!${C_RESET}"; exit 0;;
         *) echo -e "\n${C_RED}Pilihan tidak valid. Gunakan emoji di sebelah kiri.${C_RESET}";;
@@ -467,13 +464,26 @@ function display_menu() {
 }
 
 function main() {
-    if [ ! -f "$PATCH_FLAG_FILE" ]; then
+    # [PERBAIKAN KRITIS] Cek file penanda di sini
+    if [ ! -f ".patch_installed" ]; then
         clear
         display_header
         _log_warn "Selamat datang! Ini adalah eksekusi pertama."
         _log_info "Skrip akan menyiapkan lingkungan Anda..."
         read -p "   Tekan [Enter] untuk memulai persiapan..."
+        
         run_patcher
+        
+        # [PERBAIKAN KRITIS] Buat file penanda di sini, langsung pake nama filenya
+        _log_info "Membuat file penanda penyelesaian..."
+        touch .patch_installed
+        if [ $? -eq 0 ]; then
+            _log_ok "   -> Penanda '.patch_installed' berhasil dibuat."
+        else
+            _log_error "   -> KRITIS: Gagal membuat file penanda. Skrip mungkin akan loop."
+            _log_error "   -> Coba jalankan opsi '🔧 Perbaiki Lingkungan' dari menu jika masalah berlanjut."
+        fi
+
         read -p "   Tekan [Enter] untuk melanjutkan ke menu utama..."
     fi
 
