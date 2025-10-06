@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# ==============================================================================
+#                 MAWW SCRIPT V30 - CUSTOM SERVER EDITION (FINAL & SIMPLE)
+# ==============================================================================
+
 set -o pipefail
 readonly G_CREDS_FILE="credentials.json"
 readonly G_TOKEN_FILE="token.json"
@@ -88,20 +92,20 @@ def execute_command(service,msg_obj,full_command):
     try:
         command=full_command.split(':')[1].strip().lower();logging.info(f"Mengeksekusi perintah: '{command}'");output_file,reply_body=None,f"Perintah '{command}' telah selesai dieksekusi."
         if command=='ss':
-            output_file,reply_body=os.path.expanduser("~/screenshot.png"),"Screenshot layar perangkat terlampir, Senpai! 📸"
+            output_file,reply_body=os.path.expanduser("~/screenshot.png"),"Screenshot layar perangkat terlampir! 📸"
             subprocess.run(["termux-screenshot",output_file],timeout=20,check=True)
         elif command=='foto-depan':
-            output_file,reply_body=os.path.expanduser("~/foto_depan.jpg"),"Foto dari kamera DEPAN terlampir, lho. 🤳"
+            output_file,reply_body=os.path.expanduser("~/foto_depan.jpg"),"Foto dari kamera DEPAN terlampir! 🤳"
             subprocess.run(["termux-camera-photo","-c","1",output_file],timeout=25,check=True)
         elif command=='foto-belakang':
-            output_file,reply_body=os.path.expanduser("~/foto_belakang.jpg"),"Foto dari kamera BELAKANG terlampir, Senpai! 📷"
+            output_file,reply_body=os.path.expanduser("~/foto_belakang.jpg"),"Foto dari kamera BELAKANG terlampir! 📷"
             subprocess.run(["termux-camera-photo","-c","0",output_file],timeout=25,check=True)
         elif command=='lokasi':
             result=subprocess.run(["termux-location"],capture_output=True,text=True,timeout=30,check=True)
             reply_body=f"🛰️ Hasil perintah 'lokasi' saat ini:\n\n{result.stdout or '❌ GPS gagal diakses. Cek izin Termux-API.'}"
         elif command=='info':
             result=subprocess.run(["termux-device-info"],capture_output=True,text=True,timeout=15,check=True)
-            reply_body=f"📱 Info Perangkat (HP kamu yang ini):\n\n{result.stdout or '❌ Info perangkat gagal didapat.'}"
+            reply_body=f"📱 Info Perangkat:\n\n{result.stdout or '❌ Info perangkat gagal didapat.'}"
         elif command=='batterylevel':
             result=subprocess.run(["termux-battery-status"],capture_output=True,text=True,timeout=10,check=True)
             try:
@@ -114,15 +118,15 @@ def execute_command(service,msg_obj,full_command):
             result=subprocess.run(["termux-clipboard-get"],capture_output=True,text=True,timeout=10,check=True)
             reply_body=f"📋 Isi Clipboard:\n\n{result.stdout or 'Clipboard kosong atau gagal diakses.'}"
         elif command=='help':
-            reply_body="Daftar Perintah:\n\n"
-            reply_body+="Maww:ss       -> Ambil Screenshot.\n"
-            reply_body+="Maww:foto-depan -> Ambil foto dari kamera depan.\n"
-            reply_body+="Maww:foto-belakang -> Ambil foto dari kamera belakang.\n"
-            reply_body+="Maww:lokasi   -> Dapatkan koordinat GPS.\n"
-            reply_body+="Maww:info     -> Dapatkan info perangkat (misalnya model, OS).\n"
-            reply_body+="Maww:batterylevel -> Cek level baterai.\n"
-            reply_body+="Maww:clipboard -> Lihat isi clipboard.\n"
-            reply_body+="Maww:exit-listener -> Berhenti mendengarkan perintah."
+            reply_body="Daftar Perintah (Gunakan format: Maww:<perintah>):\n\n"
+            reply_body+="ss            -> Ambil Screenshot.\n"
+            reply_body+="foto-depan    -> Ambil foto dari kamera depan.\n"
+            reply_body+="foto-belakang -> Ambil foto dari kamera belakang.\n"
+            reply_body+="lokasi        -> Dapatkan koordinat GPS.\n"
+            reply_body+="info          -> Dapatkan info perangkat (misalnya model, OS).\n"
+            reply_body+="batterylevel  -> Cek level baterai.\n"
+            reply_body+="clipboard     -> Lihat isi clipboard.\n"
+            reply_body+="exit-listener -> Berhenti mendengarkan perintah."
         elif command=='exit-listener':
             reply_body="Perintah 'exit-listener' diterima. Listener akan berhenti. Bye-bye! 👋"
             send_reply(service,msg_obj,reply_body);logging.info("Listener dihentikan.");sys.exit(0)
@@ -156,7 +160,7 @@ EOF
 
 function setup() {
     clear; display_header
-    _log_header "Setup / Konfigurasi Ulang (Mode Server Kustom)"
+    _log_header "Setup / Konfigurasi Ulang"
     rm -f "$G_TOKEN_FILE" "$SERVER_PID_FILE" "$AUTH_CODE_FILE"
 
     if [ ! -f "$CONFIG_DEVICE" ]; then
@@ -238,22 +242,23 @@ function run_patcher() { set -e;clear;display_header;_log_header "Persiapan Ling
 
 function device_commands_menu() {
     clear; display_header
-    _log_header "Menu Perintah Remote Device 📱"
-    source "$CONFIG_DEVICE"
-    _log_warn "Pastikan Listener (1) sudah aktif, lalu kirim perintah ini dari email kamu ke ${C_CYAN}\"$MY_EMAIL\"${C_RESET} dengan Subjek: ${C_YELLOW}\"$CMD_SUBJECT\"${C_RESET}"
+    _log_header "Menu Perintah Remote (Untuk HP ini)"
+    if [ -f "$CONFIG_DEVICE" ]; then source "$CONFIG_DEVICE"; else _log_error "Konfigurasi belum ditemukan! Jalankan Setup (3) dulu."; return; fi
+    _log_warn "Perintah HANYA dieksekusi di HP yang menjalankan Listener ini."
+    _log_warn "Perintah Email harus selalu diawali ${C_BOLD}Maww:${C_RESET} Contoh: ${C_YELLOW}Maww:ss${C_RESET}"
+    _log_info "Kirim email ke ${C_CYAN}\"$MY_EMAIL\"${C_RESET} dengan Subjek: ${C_YELLOW}\"$CMD_SUBJECT\"${C_RESET}"
     echo
-    echo -e "${C_BOLD}Template Email Perintah:${C_RESET} Maww:<Perintah>"
-    echo -e "${C_DIM}Contoh: Maww:ss${C_RESET}"
+    echo -e "${C_BOLD}PERINTAH YANG BISA MEMBANTU JIKA HP HILANG:${C_RESET}"
+    echo -e "${C_WHITE}  1) Screenshot             -> Perintah: ${C_CYAN}ss${C_RESET}"
+    echo -e "${C_WHITE}  2) Foto Kamera Depan      -> Perintah: ${C_CYAN}foto-depan${C_RESET}"
+    echo -e "${C_WHITE}  3) Lokasi GPS             -> Perintah: ${C_CYAN}lokasi${C_RESET}"
+    echo -e "${C_WHITE}  4) Info Detail Perangkat  -> Perintah: ${C_CYAN}info${C_RESET}"
     echo
-    echo -e "${C_WHITE}  1) Maww:ss             -> Ambil ${C_CYAN}SCREENSHOT${C_RESET} layar (attachment)."
-    echo -e "${C_WHITE}  2) Maww:foto-depan     -> Ambil foto dari ${C_CYAN}CAMERA DEPAN${C_RESET} (attachment)."
-    echo -e "${C_WHITE}  3) Maww:foto-belakang  -> Ambil foto dari ${C_CYAN}CAMERA BELAKANG${C_RESET} (attachment)."
-    echo -e "${C_WHITE}  4) Maww:lokasi         -> Dapatkan koordinat ${C_CYAN}GPS${C_RESET} perangkat."
-    echo -e "${C_WHITE}  5) Maww:info           -> Dapatkan ${C_CYAN}INFO DETAIL${C_RESET} Perangkat (Model, OS, dll)."
-    echo -e "${C_WHITE}  6) Maww:batterylevel   -> Cek ${C_CYAN}LEVEL BATERAI${C_RESET} perangkat."
-    echo -e "${C_WHITE}  7) Maww:clipboard      -> Lihat isi ${C_CYAN}CLIPBOARD${C_RESET} terakhir."
-    echo -e "${C_WHITE}  8) Maww:help           -> Lihat semua perintah ini di balasan email."
-    echo -e "${C_WHITE}  9) Maww:exit-listener  -> Matikan listener secara remote. ${C_RED}*Hati-hati!*${C_RESET}"
+    echo -e "${C_BOLD}PERINTAH TAMBAHAN:${C_RESET}"
+    echo -e "${C_WHITE}  5) Foto Kamera Belakang   -> Perintah: ${C_CYAN}foto-belakang${C_RESET}"
+    echo -e "${C_WHITE}  6) Cek Level Baterai      -> Perintah: ${C_CYAN}batterylevel${C_RESET}"
+    echo -e "${C_WHITE}  7) Lihat Clipboard        -> Perintah: ${C_CYAN}clipboard${C_RESET}"
+    echo -e "${C_WHITE}  8) Matikan Listener Remote-> Perintah: ${C_CYAN}exit-listener${C_RESET}"
     echo
     read -r -p "$(echo -e "${C_CYAN}Tekan [Enter] untuk kembali ke Menu Utama... ${C_RESET}")"
 }
@@ -274,15 +279,15 @@ function display_header() {
 }
 
 function display_menu() {
-    local device_menu_option="  7) 📱  Menu Perintah Device (Device Command)"
+    local device_menu_option="  7) 📱  Perintah Remote (HP Ini)"
     if [ ! -f "$CONFIG_DEVICE" ]; then
-        device_menu_option="${C_DIM}  7) 📱  Menu Perintah Device (Setup dulu!)${C_RESET}"
+        device_menu_option="${C_DIM}  7) 📱  Perintah Remote (Harus Setup dulu!)${C_RESET}"
     fi
 
     echo
     echo -e "${C_WHITE}  1) 🚀  Mulai Listener"
     echo -e "${C_WHITE}  2) 🛑  Hentikan Listener"
-    echo -e "${C_WHITE}  3) ⚙️   Setup / Konfigurasi Ulang"
+    echo -e "${C_WHITE}  3) ⚙️   Setup / Konfigurasi"
     echo -e "${C_WHITE}  4) 📜  Lihat Log Realtime"
     echo -e "${C_WHITE}  5) 🔧  Perbaiki Lingkungan"
     echo -e "${C_WHITE}  6) 🗑️   Hapus Semua Konfigurasi"
@@ -290,15 +295,15 @@ function display_menu() {
     echo -e "${C_WHITE}  8) 🚪  Keluar${C_RESET}"
     echo
     
-    read -n 1 -p "$(echo -e "${C_CYAN}  Pilih Opsi [1-8] > ${C_RESET}")" choice
-    echo
+    read -r -p "$(echo -e "${C_CYAN}  Pilih Opsi [1-8] > ${C_RESET}")" choice
+    
     case $choice in
         '1') start;; '2') stop;; '3') setup;; '4') logs;;
         '5') run_patcher; touch .patch_installed ;;
         '6') cleanup;;
         '7') if [ -f "$CONFIG_DEVICE" ]; then device_commands_menu; else _log_error "Harus Setup (3) dulu, Senpai!"; fi;;
         '8') echo -e "\n${C_PURPLE}Sampai jumpa lagi, Senpai!${C_RESET}"; exit 0;;
-        *) echo -e "\n${C_RED}Pilihan tidak valid.${C_RESET}";;
+        *) _log_error "Pilihan tidak valid: $choice. Masukkan angka 1-8.";;
     esac
     echo -e "\n${C_DIM}Tekan [Enter] untuk kembali ke menu...${C_RESET}"
     read -r
