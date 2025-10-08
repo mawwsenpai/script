@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#           MAWW SCRIPT V46 - SMART DEBUG & STABILITY UPDATE
+#           MAWW SCRIPT V45 - AUTO AUTH & STABILITY UPDATE
 # ==============================================================================
 # Perbaikan:
-# 1. DEBUG OTOMATIS: Jika listener gagal start, log error akan
-#    langsung ditampilkan di layar.
-# 2. STABILITAS: Peningkatan minor pada logika start/stop.
+# 1. OTENTIKASI OTOMATIS: Langsung membuka browser saat setup.
+# 2. SUPER STABIL: Menggunakan Termux Wake Lock agar proses tidak mati.
+# 3. LEBIH CEPAT: Optimasi dan perbaikan kecil.
+# 4. ROBUST: Penanganan error jaringan yang lebih baik di listener.
 # ==============================================================================
 
 # --- KONFIGURASI DASAR ---
@@ -60,7 +61,7 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
             with open(OUTPUT_FILE,"w") as f:f.write(auth_code)
             self.send_response(200);self.send_header("Content-type","text/html");self.end_headers()
             self.wfile.write(b"<html><head><title>Berhasil</title><meta name='viewport' content='width=device-width, initial-scale=1'><style>body{font-family:monospace;background:#1a1a1a;color:#e0e0e0;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}div{text-align:center;}h1{color:#4CAF50;}p{color:#aaa;}</style></head>")
-            self.wfile.write(b"<body><div><h1>✔ Kode Diterima!</h1><p>Anda bisa menutup tab ini dan kembali ke Termux sekarang.</p></div></body></html>")
+            self.wfile.write(b"<body><div><h1>&#10004; Kode Diterima!</h1><p>Anda bisa menutup tab ini dan kembali ke Termux sekarang.</p></div></body></html>")
             # Paksa server untuk berhenti setelah berhasil
             self.server.server_close()
 with socketserver.TCPServer(("",PORT),MyRequestHandler) as httpd:
@@ -203,7 +204,7 @@ def main_loop():
         creds = Credentials.from_authorized_user_file(TOKEN_FILE,['https://www.googleapis.com/auth/gmail.modify'])
     
     if not creds:
-        logging.fatal("FATAL: File token.json tidak ada atau rusak. Jalankan setup ulang."); sys.exit(1)
+        logging.fatal("File token.json tidak ada atau rusak. Jalankan setup ulang."); sys.exit(1)
 
     while True:
         try:
@@ -211,7 +212,7 @@ def main_loop():
                 if creds.expired and creds.refresh_token:
                     logging.warning("Token expired, mencoba refresh..."); creds.refresh(Request())
                 else:
-                    logging.error("FATAL: Token tidak bisa direfresh. Jalankan setup ulang."); sys.exit(1)
+                    logging.error("Token tidak bisa direfresh. Jalankan setup ulang."); sys.exit(1)
 
             gmail_service = build('gmail','v1',credentials=creds)
             q=f"is:unread subject:'{CMD_SUBJECT}'"
@@ -318,9 +319,6 @@ function setup() {
     rm -f "$AUTH_CODE_FILE"
 }
 
-# ==============================================================================
-# =================== FUNGSI START YANG LEBIH CERDAS (v46) =====================
-# ==============================================================================
 function start() {
     clear; display_header
     _log_header "Memulai Listener"
@@ -350,20 +348,9 @@ function start() {
         _log_info "Cek log di '$LOG_FILE' atau gunakan menu Debug."
     else
         _log_error "GAGAL MEMULAI LISTENER!"
-        _log_warn "Proses kemungkinan crash saat startup."
+        _log_warn "Proses kemungkinan crash. Cek '$STARTUP_LOG_FILE' untuk detail."
         termux-wake-unlock # Matikan wake lock jika gagal
         rm -f "$PID_FILE"
-        
-        # --- [FITUR BARU] TAMPILKAN LOG ERROR OTOMATIS ---
-        if [ -f "$STARTUP_LOG_FILE" ]; then
-            echo -e "${C_RED}--------------------[ ISI STARTUP.LOG ]--------------------${C_RESET}"
-            echo -e "${C_DIM}"
-            cat "$STARTUP_LOG_FILE"
-            echo -e "${C_RESET}${C_RED}-----------------------------------------------------------${C_RESET}"
-            _log_warn "Silakan copy-paste error di atas untuk dianalisis."
-        else
-            _log_error "File '$STARTUP_LOG_FILE' tidak ditemukan, error tidak diketahui."
-        fi
     fi
 }
 
@@ -450,7 +437,7 @@ function display_header() {
         status_text="TIDAK AKTIF"; status_color="$C_RED"; pid_text="(Gagal? Coba menu Debug)"
     fi
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
-    echo -e "${C_BOLD}${C_WHITE} Maww Script v46 (Smart Debug)${C_RESET}"
+    echo -e "${C_BOLD}${C_WHITE} Maww Script v45 (Auto Auth & Stable)${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
     echo -e "${C_BOLD}${status_color} Status: ${status_text}${C_RESET} ${C_DIM}${pid_text}${C_RESET}"
     echo -e "${C_PURPLE}-----------------------------------------------------${C_RESET}"
