@@ -1,28 +1,83 @@
+# -*- coding: utf-8 -*-
+
 import os
 import sys
 import shutil
 import subprocess
 import time
-import importlib.util
+from pathlib import Path
 
-# --- Konfigurasi Awal ---
-# Pastikan path ini sesuai dengan struktur penyimpanan di perangkatmu
-OBB_SOURCE_DIR = "/sdcard/Android/obb/"
-OUTPUT_DIR = "/sdcard/MawwScript/obb-modding/"
-TEMP_DIR = os.path.join(OUTPUT_DIR, "temp_extraction") # Direktori temp di dalam output
-CONFIG_FILE_PATH = "game/config-freefire.py"
-OBBTOOL_NAME = "obbtool"
-TIMEOUT_DETIK = 300  # Batas waktu 5 menit untuk setiap perintah eksternal
+# ==============================================================================
+# ||                       KONFIGURASI & EDIT MOD KAMU DI SINI                  ||
+# ==============================================================================
+
+# --- Path Dasar ---
+# Semua hasil kerja akan disimpan di sini
+BASE_DIR = Path("/sdcard/OprekOBB/")
+
+# --- Logika Mod Kamu ---
+# Buat fungsi-fungsi mod kamu di bawah ini.
+# Setiap fungsi WAJIB menerima satu argumen, yaitu `path_ekstrak`.
+# `path_ekstrak` adalah lokasi folder hasil bongkaran OBB.
+
+def mod_unlock_skin(path_ekstrak: Path):
+    """
+    Contoh fungsi untuk mod skin.
+    Logika modding-mu (copy file, ganti file, etc.) taruh di sini.
+    """
+    print(f"  -> Menjalankan mod 'Unlock All Skin'...")
+    try:
+        # Contoh: Membuat file penanda di dalam folder assets
+        assets_dir = path_ekstrak / "assets"
+        assets_dir.mkdir(exist_ok=True) # Buat folder assets kalo belum ada
+        
+        marker_file = assets_dir / "mod_terpasang.txt"
+        marker_file.write_text("Skin Mod by MawwSenpai Was Here!")
+        
+        print(f"  -> Berhasil membuat file penanda di: {marker_file}")
+        print("  -> (Ganti logika di fungsi ini dengan file mod-mu yang sebenarnya)")
+
+    except Exception as e:
+        print(f"  -> GAGAL menjalankan mod: {e}")
+
+def mod_hapus_iklan(path_ekstrak: Path):
+    """Contoh fungsi untuk menghapus file iklan."""
+    print(f"  -> Menjalankan mod 'Hapus Iklan'... ")
+    
+    # Contoh: Mencari dan menghapus file/folder iklan
+    folder_iklan = path_ekstrak / "assets" / "iklan"
+    if folder_iklan.exists() and folder_iklan.is_dir():
+        shutil.rmtree(folder_iklan)
+        print(f"  -> Berhasil menghapus folder: {folder_iklan}")
+    else:
+        print("  -> Folder iklan tidak ditemukan, mungkin sudah bersih.")
+
+# --- Daftar Mod yang Akan Muncul di Menu ---
+# Format: 'Nama Keren di Menu': nama_fungsi_di_atas
+MODS = {
+    '✨ Unlock All Skin': mod_unlock_skin,
+    '🚫 Hapus Iklan Game': mod_hapus_iklan,
+}
+
+# ==============================================================================
+# ||                          BAGIAN INTI SCRIPT (JANGAN DIUBAH)                ||
+# ==============================================================================
+
+# --- Konfigurasi Sistem ---
+OBB_SOURCE_DIR = Path("/sdcard/Android/obb/")
+OUTPUT_DIR = BASE_DIR / "hasil-mod"
+TEMP_DIR = BASE_DIR / "temp_extraction"
+TIMEOUT_DETIK = 600  # Batas waktu 10 menit
 
 # --- Kode Warna Biar Kece ---
 class Warna:
-    HEADER = '\033[95m'
-    BIRU = '\033[94m'
+    MERAH = '\033[91m'
     HIJAU = '\033[92m'
     KUNING = '\033[93m'
-    MERAH = '\033[91m'
-    ENDC = '\033[0m'
+    BIRU = '\033[94m'
+    HEADER = '\033[95m'
     BOLD = '\033[1m'
+    ENDC = '\033[0m'
 
 # --- Fungsi Bantuan ---
 def bersihkan_layar():
@@ -31,313 +86,195 @@ def bersihkan_layar():
 def tampilkan_header():
     header = f"""
 {Warna.BOLD}{Warna.BIRU}
-    __  ___  __  __  __  __  __  __  ____  ____
-   (  )/ __)(  \/  )(  )(  )(  \/  )(_  _)(_  _)
-    )( \__ \ )    (  )(__)(  )    (  _)(_  _)(_
-   (__)(___/(_/\/\_)(______)(_/\/\_)(____)(____)
-                     {Warna.HIJAU}V2.0 - MawwSenpai_{Warna.ENDC}
-{Warna.ENDC}
-    """
+    ___  ____  ____  _  _  ____  ____  _  _
+   / __)(_  _)(_  _)( \/ )(_  _)(_  _)( \/ )
+  ( (__  _)(_  _)(_  \  /  _)(_  _)(_  \  /
+   \___)(____)(____)  \/  (____)(____)  \/
+    {Warna.HIJAU}---==[ Script OBB All-in-One Stabil ]==---{Warna.ENDC}
+"""
     print(header)
 
-def jalankan_perintah(perintah, pesan_awal, pesan_sukses):
-    """
-    Menjalankan perintah shell dengan lebih aman (timeout) dan menampilkan status.
-    """
+def jalankan_perintah(perintah, pesan_awal):
     print(f"{Warna.BIRU}[*] {pesan_awal}...{Warna.ENDC}")
     try:
-        # PENJELASAN PERUBAHAN: Menambahkan timeout untuk mencegah script hang
+        # Jika perintah adalah string (untuk kasus `cd && zip`), gunakan shell=True
+        is_shell = isinstance(perintah, str)
         result = subprocess.run(
             perintah,
-            shell=isinstance(perintah, str), # Shell=True hanya jika perintah adalah string tunggal
+            shell=is_shell,
             check=True,
             capture_output=True,
             text=True,
             timeout=TIMEOUT_DETIK
         )
-        print(f"{Warna.HIJAU}[✔] {pesan_sukses}{Warna.ENDC}")
         return True
     except FileNotFoundError:
-        print(f"{Warna.MERAH}[✖] Perintah tidak ditemukan. Script ini paling cocok di Termux.{Warna.ENDC}")
+        cmd = perintah.split()[0] if is_shell else perintah[0]
+        print(f"{Warna.MERAH}[✖] Perintah '{cmd}' tidak ditemukan. Script ini butuh Termux!{Warna.ENDC}")
         return False
     except subprocess.CalledProcessError as e:
         print(f"{Warna.MERAH}[✖] Gagal! Perintah mengembalikan error:{Warna.ENDC}")
         print(f"   {Warna.KUNING}{e.stderr.strip()}{Warna.ENDC}")
         return False
     except subprocess.TimeoutExpired:
-        print(f"{Warna.MERAH}[✖] Gagal! Proses memakan waktu terlalu lama (lebih dari {TIMEOUT_DETIK} detik).{Warna.ENDC}")
+        print(f"{Warna.MERAH}[✖] Gagal! Proses kelamaan (lebih dari {TIMEOUT_DETIK / 60:.0f} menit).{Warna.ENDC}")
         return False
     except Exception as e:
         print(f"{Warna.MERAH}[✖] Terjadi error tak terduga: {e}{Warna.ENDC}")
         return False
 
-# --- Fungsi Pengecekan & Instalasi ---
-def cek_izin_penyimpanan():
-    """
-    PENJELASAN PERUBAHAN: Fungsi baru yang sangat penting.
-    Mengecek apakah direktori /sdcard ada. Jika tidak, Termux belum dapat izin.
-    """
-    if not os.path.isdir('/sdcard'):
-        print(f"{Warna.MERAH}[✖] Akses ke penyimpanan ditolak!{Warna.ENDC}")
-        print(f"{Warna.KUNING}   Jalankan perintah ini dulu di Termux:{Warna.ENDC}")
-        print(f"   {Warna.BOLD}termux-setup-storage{Warna.ENDC}")
-        print(f"{Warna.KUNING}   Lalu izinkan akses pada popup yang muncul.{Warna.ENDC}")
-        return False
-    print(f"{Warna.HIJAU}[✔] Akses penyimpanan sudah aman!{Warna.ENDC}")
-    return True
-
+# --- Fungsi Inti ---
 def cek_dan_install_kebutuhan():
-    """Mengecek dan menginstall semua kebutuhan secara otomatis di Termux."""
+    """Mengecek dan menginstall semua kebutuhan secara otomatis."""
     print(f"{Warna.KUNING}--- Mengecek Kebutuhan Script ---{Warna.ENDC}")
-
-    if not cek_izin_penyimpanan():
+    
+    if not OBB_SOURCE_DIR.parent.exists():
+        print(f"{Warna.MERAH}[✖] Akses ke /sdcard ditolak!{Warna.ENDC}")
+        print(f"{Warna.KUNING}   => Jalankan perintah ini dulu di Termux: {Warna.BOLD}termux-setup-storage{Warna.ENDC}")
         return False
+    print(f"{Warna.HIJAU}[✔] Akses penyimpanan aman.{Warna.ENDC}")
 
-    if not os.path.isdir('/data/data/com.termux/files/usr'):
-        print(f"{Warna.KUNING}Peringatan: Kamu tidak di Termux. Pastikan '{OBBTOOL_NAME}' sudah terinstall manual.{Warna.ENDC}")
-        return shutil.which(OBBTOOL_NAME) is not None
+    kebutuhan = ['zip', 'unzip']
+    paket_kurang = [pkg for pkg in kebutuhan if not shutil.which(pkg)]
 
-    paket_dasar = ['coreutils', 'gnupg', 'curl']
-    semua_aman = True
-
-    if not jalankan_perintah(['pkg', 'update', '-y'], "Memperbarui daftar paket", "Daftar paket sudah fresh"):
-        return False
-
-    for pkg in paket_dasar:
-        if not shutil.which(pkg):
-            if not jalankan_perintah(['pkg', 'install', pkg, '-y'], f"Menginstall {pkg}", f"{pkg} berhasil diinstall"):
-                return False
-        else:
-            print(f"{Warna.HIJAU}[✔] {pkg} sudah ada.{Warna.ENDC}")
-
-    if not shutil.which(OBBTOOL_NAME):
-        print(f"{Warna.KUNING}[!] {OBBTOOL_NAME} tidak ditemukan. Memulai instalasi...{Warna.ENDC}")
-        repo_script_url = "https://its-pointless.github.io/setup-pointless-repo.sh"
-        if (jalankan_perintah(f"curl -LO {repo_script_url}", "Mengunduh script repository", "Script berhasil diunduh") and
-            jalankan_perintah("bash setup-pointless-repo.sh", "Menambahkan repository", "Repository berhasil ditambah") and
-            jalankan_perintah(['pkg', 'install', OBBTOOL_NAME, '-y'], f"Menginstall {OBBTOOL_NAME}", f"{OBBTOOL_NAME} berhasil diinstall")):
-            print(f"{Warna.HIJAU}[✔] {OBBTOOL_NAME} sukses diinstall!{Warna.ENDC}")
-        else:
-            print(f"{Warna.MERAH}[✖] Gagal menginstall {OBBTOOL_NAME}.{Warna.ENDC}")
+    if paket_kurang:
+        print(f"{Warna.KUNING}[!] Paket yang kurang: {', '.join(paket_kurang)}. Mencoba install...{Warna.ENDC}")
+        perintah_install = ['pkg', 'install', '-y'] + paket_kurang
+        if not jalankan_perintah(perintah_install, f"Menginstall {', '.join(paket_kurang)}"):
             return False
+        print(f"{Warna.HIJAU}[✔] Semua kebutuhan berhasil diinstall.{Warna.ENDC}")
     else:
-        print(f"{Warna.HIJAU}[✔] {OBBTOOL_NAME} sudah ada.{Warna.ENDC}")
-
-    print(f"\n{Warna.HIJAU}Semua kebutuhan sudah terpenuhi! Mantap!{Warna.ENDC}")
-    time.sleep(2)
+        print(f"{Warna.HIJAU}[✔] Semua kebutuhan (zip, unzip) sudah ada.{Warna.ENDC}")
+    
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return True
-
-# --- Fungsi Inti Modding ---
-def siapkan_lingkungan():
-    """Membuat folder dan file konfigurasi yang dibutuhkan jika belum ada."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
-
-    if not os.path.exists(CONFIG_FILE_PATH):
-        print(f"[*] File config '{CONFIG_FILE_PATH}' belum ada, sedang dibuatkan...")
-        with open(CONFIG_FILE_PATH, 'w') as f:
-            f.write("# --- Tempat Konfigurasi Mod Kamu ---\n\n")
-            f.write('def unlock_skin(path_ekstrak):\n')
-            f.write("    # Ganti bagian ini dengan logika mod kamu\n")
-            f.write("    # Contoh: mengganti file, mengedit file, dll.\n")
-            f.write("    print(f'  -> Menerapkan mod Unlock Skin pada folder: {path_ekstrak}')\n")
-            f.write("    # shutil.copy('file_mod.txt', os.path.join(path_ekstrak, 'assets/file_target.txt'))\n")
-            f.write("    print('  -> Contoh mod berhasil diterapkan!')\n\n")
-            f.write("# Daftarkan semua fungsi mod kamu di sini\n")
-            f.write("MODS = {\n")
-            f.write("    'Unlock All Skin ✨': unlock_skin,\n")
-            f.write("}\n")
-        print(f"[*] File config '{CONFIG_FILE_PATH}' berhasil dibuat.")
 
 def pilih_obb():
-    print(f"\n{Warna.BIRU}Mencari file .obb di '{OBB_SOURCE_DIR}'...{Warna.ENDC}")
+    """Memilih file OBB yang akan dioprek."""
+    print(f"\n{Warna.HEADER}Mencari file .obb di '{OBB_SOURCE_DIR}'...{Warna.ENDC}")
     try:
-        # PENJELASAN PERUBAHAN: Mencari di semua subfolder dalam OBB_SOURCE_DIR
-        obb_files = []
-        for root, _, files in os.walk(OBB_SOURCE_DIR):
-            for file in files:
-                if file.endswith('.obb'):
-                    obb_files.append(os.path.join(root, file))
-
+        obb_files = sorted(list(OBB_SOURCE_DIR.rglob('*.obb')))
         if not obb_files:
-            print(f"{Warna.MERAH}[✖] Tidak ada file .obb ditemukan di '{OBB_SOURCE_DIR}' atau subfoldernya.{Warna.ENDC}")
-            print(f"{Warna.KUNING}   Pastikan game sudah terinstall dan path-nya benar.{Warna.ENDC}")
+            print(f"{Warna.MERAH}[✖] Tidak ada file .obb ditemukan.{Warna.ENDC}")
             return None
 
-        print(f"{Warna.HIJAU}Pilih file OBB yang mau di-mod:{Warna.ENDC}")
+        print(f"{Warna.HIJAU}Pilih file OBB target:{Warna.ENDC}")
         for i, path_file in enumerate(obb_files):
-            # Membuat nama relatif agar lebih pendek dan rapi
-            nama_relatif = os.path.relpath(path_file, OBB_SOURCE_DIR)
-            print(f"  {Warna.KUNING}[{i+1}]{Warna.ENDC} {nama_relatif}")
-
+            print(f"  {Warna.KUNING}[{i+1}]{Warna.ENDC} {path_file.relative_to(OBB_SOURCE_DIR)}")
+        
         while True:
             try:
-                pilihan = int(input(f"\n{Warna.BIRU}Masukkan nomor: {Warna.ENDC}"))
-                if 1 <= pilihan <= len(obb_files):
-                    return obb_files[pilihan-1]
-                else:
-                    print(f"{Warna.MERAH}Pilihan tidak valid! Masukkan nomor antara 1 dan {len(obb_files)}.{Warna.ENDC}")
-            except ValueError:
-                print(f"{Warna.MERAH}Input harus berupa angka!{Warna.ENDC}")
-
-    except FileNotFoundError:
-        print(f"{Warna.MERAH}[✖] Direktori '{OBB_SOURCE_DIR}' tidak ditemukan!{Warna.ENDC}")
-        print(f"{Warna.KUNING}   Cek kembali variabel OBB_SOURCE_DIR di atas.{Warna.ENDC}")
+                pilihan = int(input(f"\n{Warna.BIRU}Masukkan nomor (0 untuk batal): {Warna.ENDC}"))
+                if pilihan == 0: return None
+                if 1 <= pilihan <= len(obb_files): return obb_files[pilihan - 1]
+                else: print(f"{Warna.MERAH}Nomor tidak valid!{Warna.ENDC}")
+            except ValueError: print(f"{Warna.MERAH}Input harus angka!{Warna.ENDC}")
+    except Exception as e:
+        print(f"{Warna.MERAH}[✖] Gagal mencari file OBB: {e}{Warna.ENDC}")
         return None
 
-def ekstrak_obb(file_obb):
-    print(f"\n{Warna.BIRU}Mempersiapkan ekstraksi...{Warna.ENDC}")
-    if os.path.exists(TEMP_DIR):
-        print(f"[*] Membersihkan folder temporer lama...")
-        shutil.rmtree(TEMP_DIR)
-    os.makedirs(TEMP_DIR)
+def bongkar_obb(file_obb: Path):
+    if TEMP_DIR.exists(): shutil.rmtree(TEMP_DIR)
+    TEMP_DIR.mkdir()
+    perintah = ['unzip', '-q', '-o', str(file_obb), '-d', str(TEMP_DIR)]
+    return jalankan_perintah(perintah, f"Membongkar '{file_obb.name}'")
 
-    print(f"{Warna.HIJAU}Mengekstrak '{os.path.basename(file_obb)}' ke '{TEMP_DIR}'{Warna.ENDC}")
-    perintah = [OBBTOOL_NAME, 'x', '-o', TEMP_DIR, file_obb]
-    return jalankan_perintah(perintah, "Proses ekstraksi sedang berjalan", "Ekstraksi berhasil!")
-
-def terapkan_mod(config_mods):
-    mods = config_mods.get('MODS')
-    if not mods:
-        print(f"{Warna.MERAH}[✖] Tidak ada mod yang terdaftar di 'MODS' dalam file '{CONFIG_FILE_PATH}'!{Warna.ENDC}")
-        return False
-
-    print(f"\n{Warna.HIJAU}Pilih modifikasi yang ingin diterapkan:{Warna.ENDC}")
-    mod_list = list(mods.items())
+def terapkan_mod():
+    print(f"\n{Warna.HEADER}Pilih mod yang ingin dipasang:{Warna.ENDC}")
+    mod_list = list(MODS.items())
     for i, (nama_mod, _) in enumerate(mod_list):
         print(f"  {Warna.KUNING}[{i+1}]{Warna.ENDC} {nama_mod}")
     print(f"  {Warna.KUNING}[0]{Warna.ENDC} Kembali")
 
     while True:
         try:
-            pilihan = int(input(f"\n{Warna.BIRU}Masukkan pilihan mod: {Warna.ENDC}"))
-            if 0 <= pilihan <= len(mod_list):
-                if pilihan == 0: return False
-                nama_terpilih, fungsi_mod = mod_list[pilihan-1]
-                print(f"\n{Warna.BIRU}Menerapkan '{nama_terpilih}'...{Warna.ENDC}")
+            pilihan = int(input(f"\n{Warna.BIRU}Pilihan mod: {Warna.ENDC}"))
+            if pilihan == 0: return False
+            if 1 <= pilihan <= len(mod_list):
+                nama_terpilih, fungsi_mod = mod_list[pilihan - 1]
+                print(f"\n{Warna.BIRU}--- Menerapkan '{nama_terpilih}' ---{Warna.ENDC}")
                 fungsi_mod(TEMP_DIR)
-                print(f"{Warna.HIJAU}[✔] Mod '{nama_terpilih}' selesai diterapkan.{Warna.ENDC}")
+                print(f"{Warna.HIJAU}--- Selesai menerapkan '{nama_terpilih}' ---\n{Warna.ENDC}")
                 return True
-            else:
-                print(f"{Warna.MERAH}Pilihan tidak valid!{Warna.ENDC}")
-        except ValueError:
-            print(f"{Warna.MERAH}Input harus berupa angka!{Warna.ENDC}")
-        except Exception as e:
-            print(f"{Warna.MERAH}[✖] Terjadi error saat menerapkan mod: {e}{Warna.ENDC}")
-            return False
+            else: print(f"{Warna.MERAH}Pilihan tidak valid!{Warna.ENDC}")
+        except ValueError: print(f"{Warna.MERAH}Input harus angka!{Warna.ENDC}")
 
-def kemas_ulang_obb(nama_original):
-    nama_baru = f"modded-{os.path.basename(nama_original)}"
-    path_output_penuh = os.path.join(OUTPUT_DIR, nama_baru)
-
-    print(f"\n{Warna.BIRU}Mengemas ulang file dari '{TEMP_DIR}'...{Warna.ENDC}")
-    print(f"{Warna.HIJAU}Output akan disimpan sebagai: '{path_output_penuh}'{Warna.ENDC}")
-
-    perintah = [OBBTOOL_NAME, 'c', '-o', path_output_penuh, TEMP_DIR]
-
-    if jalankan_perintah(perintah, "Proses pengemasan berjalan", f"BERHASIL! OBB tersimpan di {OUTPUT_DIR}"):
-        shutil.rmtree(TEMP_DIR)
-        print(f"[*] Folder temporer '{TEMP_DIR}' telah dibersihkan.")
+def kemas_ulang_obb(nama_original: Path):
+    nama_baru = f"modded-{nama_original.name}"
+    path_output_penuh = OUTPUT_DIR / nama_baru
+    path_output_absolut = str(path_output_penuh.resolve())
+    
+    # Perintah ini harus dijalankan dengan shell=True untuk menangani `cd`
+    perintah = f"cd '{str(TEMP_DIR)}' && zip -r -0 '{path_output_absolut}' ."
+    
+    if jalankan_perintah(perintah, f"Mengemas ulang menjadi '{nama_baru}'"):
+        print(f"{Warna.HIJAU}{Warna.BOLD}[✔] BERHASIL! File tersimpan di:{Warna.ENDC}")
+        print(f"   {Warna.KUNING}{path_output_penuh}{Warna.ENDC}")
         return True
     return False
 
-# --- Menu Utama ---
-def menu_modding():
-    obb_terpilih = None
-    sudah_diekstrak = False
-
-    # PENJELASAN PERUBAHAN: Konfigurasi mod di-load sekali saja saat masuk menu ini.
-    try:
-        spec = importlib.util.spec_from_file_location("config_mod", CONFIG_FILE_PATH)
-        config_mods = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(config_mods)
-        config_mods_vars = vars(config_mods)
-    except FileNotFoundError:
-        print(f"{Warna.MERAH}[✖] File Konfigurasi '{CONFIG_FILE_PATH}' tidak ditemukan!{Warna.ENDC}")
-        return
-    except Exception as e:
-        print(f"{Warna.MERAH}[✖] Gagal memuat file konfigurasi mod: {e}{Warna.ENDC}")
-        return
-
-    while True:
-        bersihkan_layar()
-        tampilkan_header()
-        print(f"{Warna.KUNING}--- Menu Modding ---{Warna.ENDC}")
-        status_obb = os.path.basename(obb_terpilih) if obb_terpilih else f"{Warna.MERAH}Belum dipilih{Warna.ENDC}"
-        status_ekstrak = f"{Warna.HIJAU}Siap dimodifikasi{Warna.ENDC}" if sudah_diekstrak else f"{Warna.MERAH}Belum diekstrak{Warna.ENDC}"
-        print(f"[*] OBB Target : {status_obb}")
-        print(f"[*] Status     : {status_ekstrak}\n")
-
-        print(f"  {Warna.KUNING}[1]{Warna.ENDC} Bongkar OBB (Pilih & Ekstrak)")
-        if sudah_diekstrak:
-            print(f"  {Warna.KUNING}[2]{Warna.ENDC} Edit OBB (Terapkan Mod)")
-            print(f"  {Warna.KUNING}[3]{Warna.ENDC} Kemas Ulang OBB")
-        print(f"  {Warna.KUNING}[0]{Warna.ENDC} Kembali ke Menu Utama")
-
-        pilihan = input(f"\n{Warna.BIRU}Pilihanmu: {Warna.ENDC}")
-
-        if pilihan == '1':
-            file_pilihan = pilih_obb()
-            if file_pilihan:
-                if ekstrak_obb(file_pilihan):
-                    obb_terpilih, sudah_diekstrak = file_pilihan, True
-                else:
-                    print(f"{Warna.MERAH}Gagal mengekstrak, coba lagi.{Warna.ENDC}")
-            input("\nTekan Enter untuk melanjutkan...")
-        elif pilihan == '2' and sudah_diekstrak:
-            terapkan_mod(config_mods_vars)
-            input("\nTekan Enter untuk melanjutkan...")
-        elif pilihan == '3' and sudah_diekstrak:
-            if kemas_ulang_obb(obb_terpilih):
-                obb_terpilih, sudah_diekstrak = None, False # Reset status setelah berhasil
-            input("\nTekan Enter untuk melanjutkan...")
-        elif pilihan == '0':
-            if sudah_diekstrak:
-                print(f"{Warna.KUNING}Peringatan: Ada file yang sudah diekstrak tapi belum dikemas ulang.{Warna.ENDC}")
-                if input("Yakin mau keluar? (y/n): ").lower() != 'y':
-                    continue
-                shutil.rmtree(TEMP_DIR) # Bersihkan temp jika user tetap keluar
-            return
-        else:
-            print(f"{Warna.MERAH}Pilihan tidak ada di menu!{Warna.ENDC}")
-            time.sleep(1)
-
+# --- Loop Menu Utama ---
 def main():
-    bersihkan_layar()
-    tampilkan_header()
-
-    if not cek_dan_install_kebutuhan():
-        sys.exit(f"\n{Warna.MERAH}Gagal menyiapkan kebutuhan script. Program berhenti.{Warna.ENDC}")
-
-    siapkan_lingkungan()
-
-    while True:
+    try:
         bersihkan_layar()
         tampilkan_header()
-        print(f"{Warna.HIJAU}Selamat datang! Semua kebutuhan sudah siap.{Warna.ENDC}\n")
-        print(f"  {Warna.KUNING}[1]{Warna.ENDC} Mulai Modding")
-        print(f"  {Warna.KUNING}[2]{Warna.ENDC} Keluar")
+        if not cek_dan_install_kebutuhan():
+            sys.exit(f"\n{Warna.MERAH}Gagal menyiapkan kebutuhan script. Program berhenti.{Warna.ENDC}")
+        
+        obb_terpilih = None
+        sudah_diekstrak = False
 
-        pilihan = input(f"\n{Warna.BIRU}Pilihan: {Warna.ENDC}")
-        if pilihan == '1':
-            menu_modding()
-        elif pilihan == '2':
-            break
-        else:
-            print(f"{Warna.MERAH}Pilihan tidak ada di menu!{Warna.ENDC}")
-            time.sleep(1)
+        while True:
+            bersihkan_layar()
+            tampilkan_header()
+            print(f"{Warna.KUNING}--- Menu Utama ---{Warna.ENDC}")
+            status_obb = obb_terpilih.name if obb_terpilih else f"{Warna.MERAH}Belum dipilih{Warna.ENDC}"
+            status_ekstrak = f"{Warna.HIJAU}Siap dimodifikasi{Warna.ENDC}" if sudah_diekstrak else f"{Warna.MERAH}Belum dibongkar{Warna.ENDC}"
+            print(f"[*] OBB Target : {status_obb}")
+            print(f"[*] Status     : {status_ekstrak}\n")
+
+            print(f"  [1] Bongkar OBB (Pilih & Ekstrak)")
+            if sudah_diekstrak:
+                print(f"  [2] Pasang Mod")
+                print(f"  [3] Kemas Ulang OBB")
+            print(f"  [0] Keluar")
+
+            pilihan = input(f"\n{Warna.BIRU}Pilihanmu: {Warna.ENDC}")
+
+            if pilihan == '1':
+                file_pilihan = pilih_obb()
+                if file_pilihan:
+                    if bongkar_obb(file_pilihan):
+                        obb_terpilih, sudah_diekstrak = file_pilihan, True
+                    else:
+                        sudah_diekstrak = False # Reset status jika gagal
+                input("\nTekan Enter untuk lanjut...")
             
-    print(f"\n{Warna.KUNING}Terima kasih telah menggunakan MawwScript! Sampai jumpa!{Warna.ENDC}")
-    sys.exit(0)
+            elif pilihan == '2' and sudah_diekstrak:
+                terapkan_mod()
+                input("\nTekan Enter untuk lanjut...")
 
+            elif pilihan == '3' and sudah_diekstrak:
+                if kemas_ulang_obb(obb_terpilih):
+                    obb_terpilih, sudah_diekstrak = None, False # Reset status
+                input("\nTekan Enter untuk lanjut...")
+
+            elif pilihan == '0':
+                break
+            
+            else:
+                print(f"{Warna.MERAH}Pilihan ngaco!{Warna.ENDC}")
+                time.sleep(1)
+
+    except KeyboardInterrupt:
+        print(f"\n\n{Warna.MERAH}Program dihentikan paksa oleh user.{Warna.ENDC}")
+    finally:
+        # Bagian ini PASTI dijalankan, apapun yang terjadi. Kunci stabilitas!
+        if TEMP_DIR.exists():
+            print(f"{Warna.KUNING}[*] Membersihkan file sementara...{Warna.ENDC}")
+            shutil.rmtree(TEMP_DIR)
+            print(f"{Warna.HIJAU}[✔] Pembersihan selesai.{Warna.ENDC}")
+        print(f"\n{Warna.HEADER}Sampai jumpa lagi!{Warna.ENDC}")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        # PENJELASAN PERUBAHAN: Cek dan bersihkan folder temp jika ada saat keluar paksa
-        if os.path.exists(TEMP_DIR):
-            shutil.rmtree(TEMP_DIR)
-        print(f"\n\n{Warna.MERAH}Program dihentikan paksa. Folder temp dibersihkan. Bye!{Warna.ENDC}")
-        sys.exit(1)
-
+    main()
